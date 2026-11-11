@@ -1,0 +1,9 @@
+{
+  "name": "monte-carlo-underwriting-agent",
+  "version": "0.1.0",
+  "description": "/monte-carlo-model: one skill, one command, from IC deck + model to a confirmed variable card, a correlated Monte Carlo simulation, and the finished FP-branded IC slide.",
+  "author": "FP AI Summer Challenge, Team 13 (Emilio, Katrina, Lawrence)",
+  "skills": [
+    "skills/monte-carlo-model"
+  ]
+}

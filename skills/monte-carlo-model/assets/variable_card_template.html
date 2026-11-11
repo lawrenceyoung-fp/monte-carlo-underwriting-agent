@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<!--
+  variable_card_template.html — blank template for /monte-carlo-model, Stage 4, Path B
+  (plain Claude Code, no interactive-widget tool available).
+
+  How to use this template for a new deal:
+  1. Copy this file to cases/<deal>/variable_card_widget.html; set <title> and <h1> to the deal name.
+  2. Replace the "Seed with..." createCard(...) calls with one per proposed CONTINUOUS variable
+     (3-10 total). Fields: id, name, family, dist, p10/p50/p90 (null when unsourced — the widget
+     renders those with a red "needs input" outline automatically), source, corr_with (another
+     variable's id or null — AT MOST ONE per variable), corr_tier, commentary (required).
+  3. Replace or add createEventCard(...) calls for BINARY/DISCRETE EVENTS — one per event actually
+     proposed after screening all three standing categories (recession, regulatory, large
+     customer/contract loss) for this specific deal. Unlike continuous variables, an event's
+     `p_success` and impact fields should almost always carry Claude's own REASONED FIRST-PASS
+     ESTIMATE, not null — the widget shows an amber "estimate" outline for a filled-in judgment
+     call versus a red outline for a genuinely unestimated field. `commentary` must say why this
+     event was judged among the most impactful (and, ideally, why the other two categories were
+     considered and deprioritized — put that reasoning in whichever event's commentary makes most
+     sense, or note it if no event was proposed for a category at all).
+  4. Delete this comment block before shipping the file to the deal team.
+
+  Everything else (add/remove buttons for both variables and events, save/load versions as JSON,
+  export to YAML, export to Excel via SheetJS, the Confirm button) is generic and should not need
+  editing per deal.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DEAL NAME — Monte Carlo variable card</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#ffffff; --card:#f7f6f2; --text:#1a1a18; --text-secondary:#5f5e5a; --text-muted:#888780;
+    --border:#e3e1d9; --border-strong:#c9c6ba; --accent:#185fa5; --accent-bg:#e6f1fb; --danger:#a32d2d; --danger-bg:#fcebeb;
+    --radius:8px; --font:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;
+  }
+  body{font-family:var(--font);background:var(--bg);color:var(--text);margin:0;padding:24px;max-width:900px}
+  h1{font-size:18px;font-weight:500;margin:0 0 4px}
+  p.sub{font-size:13px;color:var(--text-secondary);margin:0 0 16px}
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px;align-items:center}
+  .toolbar span{font-size:12px;color:var(--text-muted);margin-left:auto}
+  button{font-family:var(--font);font-size:13px;padding:7px 12px;border:1px solid var(--border-strong);border-radius:var(--radius);background:#fff;cursor:pointer}
+  button:hover{background:#f2f1ec}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button.primary:hover{background:#134a80}
+  .vcard{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+  .vcard-head{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+  .vcard-head input.vname{font-weight:500;font-size:14px;border:none;background:transparent;flex:1;padding:2px 0}
+  .vcard-head input.vname:focus{outline:1px solid var(--border-strong);background:#fff}
+  .del-btn{border:none;background:transparent;color:var(--text-muted);cursor:pointer;font-size:16px;padding:2px 6px}
+  .del-btn:hover{color:var(--danger)}
+  .cite{font-size:11px;color:var(--text-muted);display:block;margin:0 0 8px}
+  .cite input{font-size:11px;color:var(--text-muted);border:none;background:transparent;width:100%;padding:0}
+  .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:8px}
+  .grid label{font-size:11px;color:var(--text-secondary);display:block}
+  .grid input,.grid select{width:100%;box-sizing:border-box;font-size:13px;padding:5px 6px;border:1px solid var(--border-strong);border-radius:var(--radius);background:#fff;margin-top:2px}
+  .needs{border-color:var(--danger)!important;background:var(--danger-bg)}
+  .estimate{border-color:#8a6d1a!important;background:#fdf3d8}
+  .badge-estimate{display:inline-block;font-size:10px;padding:1px 6px;border-radius:6px;background:#fdf3d8;color:#8a6d1a;margin-left:6px}
+  textarea.commentary{width:100%;box-sizing:border-box;font-size:12px;font-style:italic;color:var(--text-secondary);border:1px solid var(--border);border-radius:var(--radius);padding:8px;margin-top:4px;min-height:44px;resize:vertical}
+  section{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:14px}
+  section h2{font-size:15px;font-weight:500;margin:0 0 8px}
+  #export-out{width:100%;height:180px;margin-top:10px;font-family:ui-monospace,Consolas,monospace;font-size:12px;border:1px solid var(--border-strong);border-radius:var(--radius);padding:10px;box-sizing:border-box;display:none}
+  #confirm-banner{display:none;background:var(--accent-bg);color:var(--accent);border-radius:var(--radius);padding:10px 14px;font-size:13px;margin-bottom:14px}
+</style>
+</head>
+<body>
+
+<h1>DEAL NAME — Monte Carlo variable card</h1>
+<p class="sub">Edit any field. Red-outlined inputs have no sourced range and need your judgment. <code>commentary</code> is Claude's own reasoning for that row — overwrite it if you disagree.</p>
+
+<div id="confirm-banner"></div>
+
+<div class="toolbar">
+  <button id="add-var-btn">+ Add variable</button>
+  <button id="load-btn">Load version</button>
+  <input type="file" id="load-file" accept="application/json" style="display:none">
+  <button id="save-btn">Save version</button>
+  <button id="yaml-btn">Export YAML</button>
+  <button id="xlsx-btn">Export Excel</button>
+  <button id="confirm-btn" class="primary">Confirm variable card &rarr;</button>
+  <span id="version-label">v1</span>
+</div>
+
+<div id="var-container"></div>
+
+<section>
+  <h2>Binary / discrete events</h2>
+  <p style="font-size:12px;color:var(--text-secondary);margin:0 0 10px">Screened against three standing categories (recession, regulatory, large customer/contract loss) — proposed events carry Claude's own reasoned first-pass probability and impact estimate (amber outline), not a citation. Genuinely unestimated fields are outlined in red.</p>
+  <div id="event-container"></div>
+  <button id="add-event-btn">+ Add event</button>
+</section>
+
+<textarea id="export-out" readonly></textarea>
+
+<script>
+var FAMILIES = [["revenue_build","Revenue build"],["market_macro","Market / macro"],["margin_cost","Margin & cost"],["cash_conversion","Cash conversion"],["exit_structure","Exit & structure"],["discrete_events","Discrete events"]];
+var DISTS = [["PERT","PERT"],["lognormal","Lognormal"],["beta","Beta"],["discrete_pmf","Discrete PMF"],["bernoulli","Bernoulli"],["uniform","Uniform"]];
+var TIERS = [["0","Unrelated"],["0.2","Loosely related"],["0.4","Moderately linked"],["0.65","Strongly linked"],["0.85","Move together"]];
+var CATEGORIES = [["recession","Recession / macro"],["regulatory","Regulatory"],["customer_loss","Large customer / contract loss"],["other","Other"]];
+var varSeq = 0, eventSeq = 0, currentVersion = 1, basedOnVersion = null;
+
+function opts(list, sel){
+  return list.map(function(o){ return '<option value="'+o[0]+'"'+(o[0]===sel?' selected':'')+'>'+o[1]+'</option>'; }).join('');
+}
+
+function allVarIds(exceptEl){
+  var ids = [];
+  document.querySelectorAll('.vcard').forEach(function(c){
+    if (c !== exceptEl) ids.push([c.getAttribute('data-id'), c.querySelector('.vname').value]);
+  });
+  return ids;
+}
+
+function refreshCorrOptions(){
+  document.querySelectorAll('.vcard').forEach(function(card){
+    var sel = card.querySelector('[data-f=corr_with]');
+    var current = sel.value;
+    var others = allVarIds(card);
+    sel.innerHTML = '<option value="">None</option>' + others.map(function(o){
+      return '<option value="'+o[0]+'"'+(o[0]===current?' selected':'')+'>'+o[1]+'</option>';
+    }).join('');
+    if (current && !others.some(function(o){return o[0]===current;})) sel.value = '';
+  });
+}
+
+function createCard(d){
+  d = d || {};
+  var id = d.id || ('new_var_' + (++varSeq));
+  var div = document.createElement('div');
+  div.className = 'vcard';
+  div.setAttribute('data-id', id);
+  div.innerHTML =
+    '<div class="vcard-head"><input class="vname" value="'+(d.name||'New variable')+'"><button class="del-btn" title="Remove variable">&times;</button></div>' +
+    '<span class="cite"><input data-f="source" value="'+(d.source||'')+'" placeholder="Source citation (slide / cell)"></span>' +
+    '<div class="grid">' +
+      '<label>Family<select data-f="family">'+opts(FAMILIES, d.family||'revenue_build')+'</select></label>' +
+      '<label>Distribution<select data-f="dist">'+opts(DISTS, d.dist||'PERT')+'</select></label>' +
+      '<label>Correlated with<select data-f="corr_with"></select></label>' +
+      '<label>Tier<select data-f="corr_tier">'+opts(TIERS, d.corr_tier!==undefined?String(d.corr_tier):'0')+'</select></label>' +
+    '</div>' +
+    '<div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">' +
+      '<label>P10<input type="number" data-f="p10" class="'+(d.p10==null?'needs':'')+'" value="'+(d.p10!=null?d.p10:'')+'" placeholder="?" step="any"></label>' +
+      '<label>P50<input type="number" data-f="p50" class="'+(d.p50==null?'needs':'')+'" value="'+(d.p50!=null?d.p50:'')+'" placeholder="?" step="any"></label>' +
+      '<label>P90<input type="number" data-f="p90" class="'+(d.p90==null?'needs':'')+'" value="'+(d.p90!=null?d.p90:'')+'" placeholder="?" step="any"></label>' +
+    '</div>' +
+    '<label style="font-size:11px;color:var(--text-secondary)">Commentary' +
+      '<textarea class="commentary" data-f="commentary" placeholder="Why this range, this distribution, this correlation (or lack of one)">'+(d.commentary||'')+'</textarea>' +
+    '</label>';
+  div.dataset.intendedCorr = d.corr_with || '';
+  div.querySelector('.del-btn').addEventListener('click', function(){
+    div.remove();
+    refreshCorrOptions();
+  });
+  document.getElementById('var-container').appendChild(div);
+  refreshCorrOptions();
+  return div;
+}
+
+// Correlation targets are ids of OTHER cards, some of which may not exist yet at the moment a
+// given card is created (seed data and loaded files are just arrays, not a dependency-ordered
+// graph). Each card stashes its intended target in data-intended-corr at creation time; call this
+// once after every card in a batch exists, so every "correlated with" select can find its option.
+function finalizeCorrelations(){
+  document.querySelectorAll('#var-container .vcard').forEach(function(card){
+    var intended = card.dataset.intendedCorr;
+    if (intended) card.querySelector('[data-f=corr_with]').value = intended;
+  });
+}
+
+var SHOCK_TYPES = [["permanent","Permanent (one-time step-change)"],["temporary_with_recovery","Temporary (hits hard, then recovers)"]];
+
+function createEventCard(d){
+  d = d || {};
+  var id = d.id || ('event_' + (++eventSeq));
+  var pClass = d.p_success == null ? 'needs' : 'estimate';
+  var isTemp = (d.shock_type === 'temporary_with_recovery');
+  var div = document.createElement('div');
+  div.className = 'vcard';
+  div.setAttribute('data-event-id', id);
+  div.innerHTML =
+    '<div class="vcard-head"><input class="vname" value="'+(d.name||'New event')+'"><button class="del-btn" title="Remove event">&times;</button></div>' +
+    '<span class="cite"><input data-f="source" value="'+(d.source||'')+'" placeholder="Source (or \\"no explicit mention -- see commentary\\")"></span>' +
+    '<div class="grid">' +
+      '<label>Category<select data-f="category">'+opts(CATEGORIES, d.category||'other')+'</select></label>' +
+      '<label>Shock type<select data-f="shock_type">'+opts(SHOCK_TYPES, d.shock_type||'permanent')+'</select></label>' +
+      '<label>P(adverse branch does NOT fire)'+(d.p_success==null?'':' <span class="badge-estimate">estimate</span>')+'<input type="number" data-f="p_success" class="'+pClass+'" value="'+(d.p_success!=null?d.p_success:'')+'" placeholder="?" min="0" max="1" step="0.05"></label>' +
+    '</div>' +
+    '<div class="acute-block" style="display:'+(isTemp?'block':'none')+';background:var(--danger-bg);border-radius:var(--radius);padding:8px 10px;margin-bottom:8px">' +
+      '<div style="font-size:11px;color:var(--danger);font-weight:500;margin-bottom:4px">Acute phase (severe, short-lived)</div>' +
+      '<div class="grid" style="grid-template-columns:repeat(4,minmax(0,1fr))">' +
+        '<label>Revenue %<input type="number" data-f="acute_rev" class="'+(d.acute_rev==null?'needs':'estimate')+'" value="'+(d.acute_rev!=null?d.acute_rev:'')+'" placeholder="?" step="0.5"></label>' +
+        '<label>Margin (pp)<input type="number" data-f="acute_margin" class="'+(d.acute_margin==null?'needs':'estimate')+'" value="'+(d.acute_margin!=null?d.acute_margin:'')+'" placeholder="?" step="0.5"></label>' +
+        '<label>FCF %<input type="number" data-f="acute_fcf" class="'+(d.acute_fcf==null?'needs':'estimate')+'" value="'+(d.acute_fcf!=null?d.acute_fcf:'')+'" placeholder="?" step="0.5"></label>' +
+        '<label>Duration (yrs)<input type="number" data-f="acute_duration" class="'+(d.acute_duration==null?'needs':'estimate')+'" value="'+(d.acute_duration!=null?d.acute_duration:'')+'" placeholder="?" step="0.25" min="0"></label>' +
+      '</div>' +
+    '</div>' +
+    '<div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">' +
+      '<label>Revenue impact % (ongoing, or residual if temporary)<input type="number" data-f="rev_impact" class="'+(d.rev_impact==null?'needs':'estimate')+'" value="'+(d.rev_impact!=null?d.rev_impact:'')+'" placeholder="?" step="0.5"></label>' +
+      '<label>Margin impact (pp)<input type="number" data-f="margin_impact" class="'+(d.margin_impact==null?'needs':'estimate')+'" value="'+(d.margin_impact!=null?d.margin_impact:'')+'" placeholder="?" step="0.5"></label>' +
+      '<label>FCF impact %<input type="number" data-f="fcf_impact" class="'+(d.fcf_impact==null?'needs':'estimate')+'" value="'+(d.fcf_impact!=null?d.fcf_impact:'')+'" placeholder="?" step="0.5"></label>' +
+    '</div>' +
+    '<label style="font-size:11px;color:var(--text-secondary)">Commentary' +
+      '<textarea class="commentary" data-f="commentary" placeholder="Why this event vs. the other two categories; why this probability; why these impact figures; why permanent vs temporary">'+(d.commentary||'')+'</textarea>' +
+    '</label>';
+  div.querySelector('.del-btn').addEventListener('click', function(){ div.remove(); });
+  div.querySelector('[data-f=shock_type]').addEventListener('change', function(e){
+    div.querySelector('.acute-block').style.display = (e.target.value === 'temporary_with_recovery') ? 'block' : 'none';
+  });
+  document.getElementById('event-container').appendChild(div);
+  return div;
+}
+
+document.getElementById('add-var-btn').addEventListener('click', function(){ createCard({}); });
+document.getElementById('add-event-btn').addEventListener('click', function(){ createEventCard({}); });
+
+function buildState(){
+  var vars = [];
+  document.querySelectorAll('#var-container .vcard').forEach(function(card){
+    var g = function(f){ var el = card.querySelector('[data-f='+f+']'); return el ? el.value : null; };
+    vars.push({
+      id: card.getAttribute('data-id'),
+      name: card.querySelector('.vname').value,
+      family: g('family'),
+      distribution: g('dist'),
+      p10: g('p10') === '' ? null : parseFloat(g('p10')),
+      p50: g('p50') === '' ? null : parseFloat(g('p50')),
+      p90: g('p90') === '' ? null : parseFloat(g('p90')),
+      source: g('source'),
+      correlated_with: g('corr_with') || null,
+      correlation_tier: g('corr_with') ? parseFloat(g('corr_tier')) : null,
+      commentary: g('commentary')
+    });
+  });
+  var events = [];
+  document.querySelectorAll('#event-container .vcard').forEach(function(card){
+    var g = function(f){ var el = card.querySelector('[data-f='+f+']'); return el ? el.value : null; };
+    events.push({
+      id: card.getAttribute('data-event-id'),
+      name: card.querySelector('.vname').value,
+      category: g('category'),
+      shock_type: g('shock_type') || 'permanent',
+      source: g('source'),
+      p_success: g('p_success') === '' ? null : parseFloat(g('p_success')),
+      revenue_pct: g('rev_impact') === '' ? null : parseFloat(g('rev_impact')),
+      margin_pct: g('margin_impact') === '' ? null : parseFloat(g('margin_impact')),
+      fcf_pct: g('fcf_impact') === '' ? null : parseFloat(g('fcf_impact')),
+      acute_revenue_pct: g('acute_rev') === '' ? null : parseFloat(g('acute_rev')),
+      acute_margin_pct: g('acute_margin') === '' ? null : parseFloat(g('acute_margin')),
+      acute_fcf_pct: g('acute_fcf') === '' ? null : parseFloat(g('acute_fcf')),
+      acute_duration_years: g('acute_duration') === '' ? null : parseFloat(g('acute_duration')),
+      commentary: g('commentary')
+    });
+  });
+  return { deal: 'DEAL NAME', version: currentVersion, based_on_version: basedOnVersion, variables: vars, binary_events: events };
+}
+
+function toYAML(state, dealConfigShape){
+  var L = [];
+  L.push('deal: "'+state.deal+'"');
+  L.push('version: '+state.version);
+  if (dealConfigShape) L.push('stage: "confirmed_for_handoff"');
+  L.push('variables:');
+  state.variables.forEach(function(v){
+    L.push('  - id: '+v.id);
+    L.push('    name: "'+v.name+'"');
+    L.push('    family: '+v.family);
+    L.push('    elicitation: ['+v.p10+', '+v.p50+', '+v.p90+']');
+    L.push('    distribution: '+v.distribution);
+    L.push('    source: "'+(v.source||'')+'"');
+    L.push('    correlated_with: {variable: '+(v.correlated_with||'null')+', value: '+(v.correlation_tier!=null?v.correlation_tier:'null')+'}');
+    L.push('    commentary: "'+(v.commentary||'').replace(/"/g,"'")+'"');
+    L.push('    review_status: '+(dealConfigShape?'confirmed':'team_adjusted'));
+  });
+  L.push('binary_events:');
+  state.binary_events.forEach(function(e){
+    L.push('  - id: '+e.id);
+    L.push('    name: "'+e.name+'"');
+    L.push('    category: '+e.category);
+    L.push('    shock_type: '+e.shock_type);
+    L.push('    p_success: '+(e.p_success!=null?e.p_success:'null'));
+    L.push('    source: "'+(e.source||'').replace(/"/g,"'")+'"');
+    L.push('    impact: {revenue_pct: '+(e.revenue_pct!=null?e.revenue_pct:'null')+', margin_pct: '+(e.margin_pct!=null?e.margin_pct:'null')+', fcf_pct: '+(e.fcf_pct!=null?e.fcf_pct:'null')+'}');
+    if (e.shock_type === 'temporary_with_recovery') {
+      L.push('    acute_impact: {revenue_pct: '+(e.acute_revenue_pct!=null?e.acute_revenue_pct:'null')+', margin_pct: '+(e.acute_margin_pct!=null?e.acute_margin_pct:'null')+', fcf_pct: '+(e.acute_fcf_pct!=null?e.acute_fcf_pct:'null')+', duration_years: '+(e.acute_duration_years!=null?e.acute_duration_years:'null')+'}');
+    }
+    L.push('    commentary: "'+(e.commentary||'').replace(/"/g,"'")+'"');
+    L.push('    review_status: '+(dealConfigShape?'confirmed':'team_adjusted'));
+  });
+  return L.join('\n');
+}
+
+function download(filename, text, mime){
+  var blob = new Blob([text], {type: mime||'text/plain'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+document.getElementById('save-btn').addEventListener('click', function(){
+  var state = buildState();
+  download('variable_card.v'+state.version+'.json', JSON.stringify(state, null, 2), 'application/json');
+  document.getElementById('version-label').textContent = 'v'+state.version+' saved';
+  currentVersion = state.version + 1;
+});
+
+document.getElementById('load-btn').addEventListener('click', function(){ document.getElementById('load-file').click(); });
+document.getElementById('load-file').addEventListener('change', function(e){
+  var file = e.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(evt){
+    var state = JSON.parse(evt.target.result);
+    document.getElementById('var-container').innerHTML = '';
+    document.getElementById('event-container').innerHTML = '';
+    (state.variables||[]).forEach(function(v){
+      createCard({id: v.id, name: v.name, family: v.family, dist: v.distribution, p10: v.p10, p50: v.p50, p90: v.p90, source: v.source, corr_with: v.correlated_with, corr_tier: v.correlation_tier, commentary: v.commentary});
+    });
+    (state.binary_events||[]).forEach(function(ev){ createEventCard({id: ev.id, name: ev.name, category: ev.category, shock_type: ev.shock_type, source: ev.source, p_success: ev.p_success, rev_impact: ev.revenue_pct, margin_impact: ev.margin_pct, fcf_impact: ev.fcf_pct, acute_rev: ev.acute_revenue_pct, acute_margin: ev.acute_margin_pct, acute_fcf: ev.acute_fcf_pct, acute_duration: ev.acute_duration_years, commentary: ev.commentary}); });
+    finalizeCorrelations();
+    basedOnVersion = state.version || null;
+    currentVersion = (state.version||0) + 1;
+    document.getElementById('version-label').textContent = 'loaded v'+state.version+' → editing as v'+currentVersion;
+  };
+  reader.readAsText(file);
+});
+
+document.getElementById('yaml-btn').addEventListener('click', function(){
+  var out = document.getElementById('export-out');
+  out.value = toYAML(buildState(), false);
+  out.style.display = 'block';
+  out.select();
+  download('variable_card.v'+currentVersion+'.yaml', out.value, 'text/yaml');
+});
+
+document.getElementById('xlsx-btn').addEventListener('click', function(){
+  var state = buildState();
+  var rows = [['Variable','Family','P10','P50','P90','Distribution','Correlated with','Tier','Source','Commentary']];
+  state.variables.forEach(function(v){ rows.push([v.name, v.family, v.p10, v.p50, v.p90, v.distribution, v.correlated_with||'', v.correlation_tier||'', v.source, v.commentary]); });
+  var ws = XLSX.utils.aoa_to_sheet(rows);
+  var evRows = [['Event','Category','Shock type','P(adverse branch does NOT fire)','Acute Revenue %','Acute Margin (pp)','Acute FCF %','Acute Duration (yrs)','Revenue impact %','Margin impact (pp)','FCF impact %','Source','Commentary']];
+  state.binary_events.forEach(function(ev){ evRows.push([ev.name, ev.category, ev.shock_type, ev.p_success, ev.acute_revenue_pct, ev.acute_margin_pct, ev.acute_fcf_pct, ev.acute_duration_years, ev.revenue_pct, ev.margin_pct, ev.fcf_pct, ev.source, ev.commentary]); });
+  var ws2 = XLSX.utils.aoa_to_sheet(evRows);
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Variables');
+  XLSX.utils.book_append_sheet(wb, ws2, 'Binary events');
+  XLSX.writeFile(wb, 'variable_card.v'+state.version+'.xlsx');
+});
+
+document.getElementById('confirm-btn').addEventListener('click', function(){
+  var who = window.prompt('Who is confirming this variable card?', '');
+  if (who === null) return;
+  var state = buildState();
+  var yaml = toYAML(state, true);
+  download('deal_config.yaml', yaml, 'text/yaml');
+  var banner = document.getElementById('confirm-banner');
+  banner.style.display = 'block';
+  banner.textContent = 'Confirmed by ' + (who || '(unspecified)') + ' — deal_config.yaml exported. Hand this file back to Claude to generate the lightweight simulation model and run the Monte Carlo.';
+});
+
+// Seed with the proposed variables for this deal — replace with real createCard(...) calls
+// per the instructions at the top of this file (3 to 10 total).
+createCard({id:'example_variable', name:'Example variable — replace me', family:'revenue_build', dist:'PERT', p10:null, p50:null, p90:null, source:'', corr_with:null, corr_tier:0,
+  commentary:'Replace with Claude\'s reasoning for the range, the distribution, and the correlation choice (or why there is none) for this variable.'});
+
+// Seed with the binary/discrete events actually proposed after screening recession, regulatory,
+// and large-customer/contract-loss for this deal. p_success and impact fields should carry a
+// reasoned first-pass estimate, not null — see the header comment.
+createEventCard({id:'example_event', name:'Example event — replace or remove me', category:'other', source:'', p_success:null, rev_impact:null, margin_impact:null, fcf_impact:null,
+  commentary:'Replace with: why this event was judged among the most impactful for this deal (and why the other two categories were or weren\'t), the reasoning behind the probability estimate, and the reasoning behind each impact figure. Remove this call entirely if screening found nothing worth modeling as a discrete event for this deal (rare, but state that explicitly rather than leaving the section silently empty).'});
+
+// Seed cards may reference each other by id before every card in the batch necessarily exists —
+// finalize once all seed cards above are created.
+finalizeCorrelations();
+</script>
+
+</body>
+</html>

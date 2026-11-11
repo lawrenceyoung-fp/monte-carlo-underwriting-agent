@@ -1,0 +1,43 @@
+{
+  "_comment": "results.json — the internal hand-off from /monte-carlo-model's Stage 6 (the lightweight shadow model) to its own Stage 7 (the IC slide). Both stages live in the same skill; this file still exists as a real, inspectable artifact between them. This document describes the shape, not real values. See cases/rightway/shadow_model.py for a fully worked producer.",
+  "deal": "Rightway",
+  "run_manifest": {
+    "random_seed": null,
+    "n_paths": 10000,
+    "engine_version": null,
+    "deal_config_hash": null,
+    "generated_at": null
+  },
+  "tie_out": {
+    "answer_key_source": "cases/rightway/Rightway Model v30.xlsx!AVP!K35:K36",
+    "base_case_irr": null,
+    "base_case_moic": null,
+    "model_irr": null,
+    "model_moic": null,
+    "irr_delta_bps": null,
+    "moic_delta": null,
+    "within_tolerance": null
+  },
+  "percentiles": {
+    "irr": { "p10": null, "p50": null, "p90": null },
+    "moic": { "p10": null, "p50": null, "p90": null }
+  },
+  "deck_cases_marked": {
+    "base": { "irr": null, "moic": null },
+    "upside": { "irr": null, "moic": null },
+    "downside": { "irr": null, "moic": null }
+  },
+  "driver_ranking": [
+    { "variable": null, "worst_decile_value": null, "best_decile_value": null }
+  ],
+  "binary_events_check": {
+    "_comment": "one entry per confirmed binary event, keyed by id — not just a single hardcoded Big 3 event",
+    "<event_id>": {
+      "category": null,
+      "p_success": null,
+      "fires_in_paths": null,
+      "mechanism": null
+    }
+  },
+  "paths": []
+}

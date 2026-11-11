@@ -1,0 +1,1874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Monte Carlo Underwriting Agent</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Crect x='1' y='1' width='18' height='18' rx='3' fill='%230b3d2e' stroke='%23b8912f' stroke-width='1.5'/%3E%3Ccircle cx='5' cy='5' r='1.6' fill='%23e8d9a8'/%3E%3Ccircle cx='15' cy='5' r='1.6' fill='%23e8d9a8'/%3E%3Ccircle cx='10' cy='10' r='1.6' fill='%23e8d9a8'/%3E%3Ccircle cx='5' cy='15' r='1.6' fill='%23e8d9a8'/%3E%3Ccircle cx='15' cy='15' r='1.6' fill='%23e8d9a8'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#0a1713; --bg-vignette:#0e2119; --card:#0f2a20; --card-raised:#123527;
+    --text:#ede6d3; --text-secondary:#b8ad8f; --text-muted:#7d7765;
+    --border:#23493a; --border-strong:#3a6350; --accent:#12503d; --accent-light:#186a4f; --accent-bg:#1a3a2c;
+    --gold:#d4af53; --gold-bright:#f0cf7d; --gold-light:#3a3320; --cream:#faf7ef;
+    --danger:#e0554a; --danger-bg:#3a1a17; --felt:#0b3d2e;
+    --radius:10px; --font:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;
+    --shadow-card:0 2px 10px rgba(0,0,0,0.35); --glow-gold:0 0 0 1px rgba(212,175,83,0.25),0 0 18px rgba(212,175,83,0.08);
+  }
+  *{box-sizing:border-box}
+  html{background:var(--bg)}
+  body{
+    font-family:var(--font);color:var(--text);margin:0;padding:24px;max-width:980px;
+    background-color:var(--bg);
+    background-image:
+      radial-gradient(circle at 50% 0%, rgba(24,106,79,0.18), rgba(10,23,19,0) 55%),
+      repeating-linear-gradient(135deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 2px, transparent 2px, transparent 26px),
+      radial-gradient(circle, rgba(212,175,83,0.05) 1px, transparent 1.4px);
+    background-size:auto, auto, 34px 34px;
+    background-attachment:fixed;
+    min-height:100vh;
+  }
+  ::selection{background:var(--gold);color:#1a1a18}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-track{background:var(--bg-vignette)}
+  ::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:6px}
+  ::-webkit-scrollbar-thumb:hover{background:var(--gold)}
+
+  .app-header{display:flex;align-items:center;gap:16px;background:linear-gradient(135deg,var(--felt) 0%,#0a2a20 100%);
+    border:1px solid var(--gold);border-radius:14px;padding:18px 22px;margin-bottom:18px;position:relative;overflow:hidden;
+    box-shadow:var(--shadow-card),var(--glow-gold)}
+  .app-header::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:0.5;
+    background-image:radial-gradient(circle at 92% 15%, rgba(212,175,83,0.16), transparent 40%),
+      radial-gradient(circle at 6% 90%, rgba(212,175,83,0.10), transparent 45%)}
+  .app-header .die-icon{flex-shrink:0;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.4))}
+  .chip-row{display:flex;gap:6px;margin-left:auto;flex-shrink:0;position:relative;z-index:1}
+  .chip-row .chip{width:30px;height:30px}
+  h1{font-size:20px;font-weight:600;margin:0 0 4px;color:var(--gold-bright);letter-spacing:0.2px;position:relative;z-index:1}
+  h2{font-size:15px;font-weight:600;margin:0 0 8px;display:flex;align-items:center;gap:7px;color:var(--gold-bright)}
+  h2::before{content:"\2660";color:var(--gold);font-size:12px}
+  section:nth-of-type(4n+2) h2::before{content:"\2665";color:var(--danger)}
+  section:nth-of-type(4n+3) h2::before{content:"\2666";color:var(--danger)}
+  section:nth-of-type(4n+4) h2::before{content:"\2663";color:var(--gold)}
+  .app-header p.sub{color:var(--text-secondary);margin:0;position:relative;z-index:1}
+  p.sub{font-size:13px;color:var(--text-secondary);margin:0 0 16px}
+  section{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-bottom:16px;
+    box-shadow:var(--shadow-card);position:relative}
+  section::before{content:"";position:absolute;top:0;left:16px;right:16px;height:1px;
+    background:linear-gradient(90deg,transparent,rgba(212,175,83,0.35),transparent)}
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center}
+  button{font-family:var(--font);font-size:13px;font-weight:500;padding:8px 14px;border:1px solid var(--border-strong);
+    border-radius:999px;background:var(--card-raised);cursor:pointer;color:var(--text);transition:transform 0.12s ease,box-shadow 0.12s ease,background 0.12s ease}
+  button:hover{background:var(--accent-light);border-color:var(--gold);transform:translateY(-1px);box-shadow:0 3px 10px rgba(0,0,0,0.3)}
+  button:active{transform:translateY(0)}
+  button.primary{background:linear-gradient(135deg,var(--gold) 0%,#b3893a 100%);border-color:var(--gold-bright);color:#241a05;font-weight:600;box-shadow:0 2px 8px rgba(212,175,83,0.25)}
+  button.primary:hover{background:linear-gradient(135deg,var(--gold-bright) 0%,var(--gold) 100%);box-shadow:0 4px 14px rgba(212,175,83,0.4)}
+  button:disabled{opacity:0.4;cursor:default;transform:none;box-shadow:none}
+  input[type=file]{font-size:12px;color:var(--text-secondary)}
+  input,select,textarea{font-family:var(--font);font-size:13px;padding:6px 8px;border:1px solid var(--border-strong);border-radius:var(--radius);background:#0a1a14;color:var(--text)}
+  input:focus,select:focus,textarea:focus{outline:1px solid var(--gold);outline-offset:1px}
+  input::placeholder,textarea::placeholder{color:var(--text-muted)}
+  .vcard{background:var(--card-raised);border:1px solid var(--border);border-top:3px solid var(--gold);border-radius:12px;padding:12px 14px;margin-bottom:10px;display:flex;gap:14px;align-items:flex-start;box-shadow:var(--shadow-card)}
+  .vcard-main{flex:1;min-width:0}
+  .vcard-chart{width:230px;flex-shrink:0}
+  .vcard-chart .dist-caption{font-size:10px;color:var(--text-muted);text-align:center;margin-top:4px}
+  .vcard-chart .dist-placeholder{font-size:11px;color:var(--text-muted);text-align:center;padding:40px 6px}
+  .vcard-head{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+  .vcard-head input.vname{font-weight:600;font-size:14px;border:none;background:transparent;flex:1;padding:2px 0;color:var(--gold-bright)}
+  .del-btn{border:none;background:transparent;color:var(--text-muted);cursor:pointer;font-size:16px;padding:2px 6px;border-radius:50%}
+  .del-btn:hover{color:#fff;background:var(--danger)}
+  .cite{font-size:11px;color:var(--text-muted);display:block;margin:0 0 8px}
+  .cite input{font-size:11px;color:var(--text-muted);border:none;background:transparent;width:100%;padding:0}
+  .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:8px}
+  .grid label{font-size:11px;color:var(--text-secondary);display:block}
+  .grid input,.grid select{width:100%;box-sizing:border-box;margin-top:2px}
+  .needs{border-color:var(--danger)!important;background:var(--danger-bg)}
+  .estimate{border-color:var(--gold)!important;background:var(--gold-light)}
+  textarea.commentary{width:100%;box-sizing:border-box;font-size:12px;font-style:italic;color:var(--text-secondary);border:1px solid var(--border);border-radius:var(--radius);padding:8px;margin-top:4px;min-height:44px;resize:vertical;background:#0a1a14}
+  #ingest-status,#propose-status{font-size:12px;color:var(--text-secondary);margin-top:8px;white-space:pre-wrap}
+  #chat-log{max-height:320px;overflow-y:auto;margin-bottom:10px;display:flex;flex-direction:column;gap:8px}
+  .msg{padding:8px 10px;border-radius:8px;font-size:13px;max-width:85%}
+  .msg.user{background:var(--accent-bg);align-self:flex-end;border:1px solid var(--border)}
+  .msg.assistant{background:var(--card-raised);border:1px solid var(--border);align-self:flex-start}
+  .chat-input{display:flex;gap:8px}
+  .chat-input textarea{flex:1;min-height:44px}
+  .fixed-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+  .fixed-grid label{font-size:11px;color:var(--text-secondary);display:block}
+  .fixed-grid input{width:100%;box-sizing:border-box;margin-top:2px}
+  .segmented{display:inline-flex;border:1px solid var(--border-strong);border-radius:999px;overflow:hidden}
+  .segmented .seg-btn{border:none;border-radius:0;padding:6px 14px;background:var(--card-raised);color:var(--text-secondary);cursor:pointer;font-size:12px;font-weight:500;transition:background 0.12s ease,color 0.12s ease}
+  .segmented .seg-btn:not(:last-child){border-right:1px solid var(--border-strong)}
+  .segmented .seg-btn:hover{background:var(--accent-light);color:var(--text)}
+  .segmented .seg-btn.active{background:var(--gold);color:#241a05;font-weight:700}
+  .segmented .seg-btn.active:hover{background:var(--gold)}
+  #results-stats,.stat-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:12px}
+  .stat{background:radial-gradient(circle at 30% 20%, var(--card-raised), #0a2015);border:2px solid var(--gold);border-radius:14px;padding:10px;position:relative;box-shadow:var(--shadow-card)}
+  .stat::after{content:"";position:absolute;inset:3px;border:1px dashed rgba(212,175,83,0.45);border-radius:10px;pointer-events:none}
+  .stat .label{font-size:11px;color:var(--text-muted)}
+  .stat .value{font-size:18px;font-weight:700;color:var(--gold-bright)}
+  svg text{font-size:10px;fill:var(--text-muted)}
+  table{width:100%;font-size:12px;border-collapse:collapse;margin-bottom:12px}
+  table th,table td{text-align:left;padding:5px 6px;border-bottom:1px solid var(--border)}
+  table th{color:var(--gold-bright);font-weight:600}
+  table tr:hover td{background:rgba(212,175,83,0.05)}
+  .roulette{display:inline-block;width:26px;height:26px;border-radius:50%;border:2px solid var(--gold);flex-shrink:0;position:relative;
+    background:conic-gradient(var(--danger) 0deg 22.5deg,#101410 22.5deg 45deg,var(--danger) 45deg 67.5deg,#101410 67.5deg 90deg,
+      var(--danger) 90deg 112.5deg,#101410 112.5deg 135deg,var(--danger) 135deg 157.5deg,#101410 157.5deg 180deg,
+      var(--danger) 180deg 202.5deg,#101410 202.5deg 225deg,var(--danger) 225deg 247.5deg,#101410 247.5deg 270deg,
+      var(--danger) 270deg 292.5deg,#101410 292.5deg 315deg,var(--danger) 315deg 337.5deg,#101410 337.5deg 360deg);
+    box-shadow:0 0 8px rgba(212,175,83,0.3)}
+  .roulette::after{content:"";position:absolute;inset:32%;background:var(--felt);border-radius:50%;border:1px solid var(--gold-bright)}
+  .roulette.spin{animation:roulette-spin 1.1s linear infinite}
+  @keyframes roulette-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+  h2.roulette-heading::before{content:none}
+  .loading-row{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text-secondary)}
+  .description-box{background:var(--card-raised);border:1px solid var(--border);border-radius:12px;padding:14px 16px;font-size:13px;color:var(--text-secondary);line-height:1.6}
+  .description-box ol{margin:8px 0 0;padding-left:20px}
+  .description-box li{margin-bottom:4px}
+
+  /* --- casino decoration --- */
+  .chip{border-radius:50%;position:relative;flex-shrink:0;box-shadow:0 2px 5px rgba(0,0,0,0.5),inset 0 0 0 2px rgba(255,255,255,0.15)}
+  .chip::before{content:"";position:absolute;inset:15%;border-radius:50%;border:2px dashed rgba(255,255,255,0.55)}
+  .chip.gold{background:radial-gradient(circle at 35% 30%, #f0cf7d, #a97e22 75%)}
+  .chip.green{background:radial-gradient(circle at 35% 30%, #2fa377, #0b3d2e 75%)}
+  .chip.red{background:radial-gradient(circle at 35% 30%, #f18b7f, #8c2c22 75%)}
+  .chip.black{background:radial-gradient(circle at 35% 30%, #4a4a4a, #101010 75%)}
+
+  .hero-graphic{display:flex;align-items:center;justify-content:center;padding:6px 0 18px;position:relative}
+  .card-fan{position:relative;width:220px;height:120px}
+  .card-fan .pcard{position:absolute;top:0;left:50%;width:78px;height:110px;border-radius:8px;background:linear-gradient(160deg,#fbf8ee,#e9e2c8);
+    border:1px solid #b8912f;box-shadow:0 6px 16px rgba(0,0,0,0.45);display:flex;flex-direction:column;justify-content:space-between;padding:8px;font-weight:700}
+  .card-fan .pcard span{font-size:16px;line-height:1}
+  .card-fan .pcard.suit-red span{color:#a32d2d}
+  .card-fan .pcard.suit-black span{color:#1a1a18}
+  .card-fan .pcard.c1{transform:translate(-115px,6px) rotate(-22deg)}
+  .card-fan .pcard.c2{transform:translate(-64px,-4px) rotate(-11deg)}
+  .card-fan .pcard.c3{transform:translate(-13px,-8px) rotate(0deg);z-index:2}
+  .card-fan .pcard.c4{transform:translate(38px,-4px) rotate(11deg)}
+  .card-fan .pcard.c5{transform:translate(89px,6px) rotate(22deg)}
+  .card-fan .pcard span:last-child{align-self:flex-end;transform:rotate(180deg)}
+
+  /* --- document preview modal --- */
+  .modal-overlay{position:fixed;inset:0;background:rgba(4,10,8,0.72);backdrop-filter:blur(2px);display:flex;
+    align-items:center;justify-content:center;z-index:1000;padding:24px}
+  .modal-box{background:var(--card);border:1px solid var(--gold);border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,0.6),var(--glow-gold);
+    width:min(820px,100%);max-height:88vh;display:flex;flex-direction:column;overflow:hidden}
+  .modal-box.wide{width:min(1120px,96vw)}
+  .modal-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--card-raised)}
+  .modal-head h3{margin:0;font-size:14px;color:var(--gold-bright);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .modal-close{border:none;background:transparent;color:var(--text-secondary);font-size:20px;line-height:1;cursor:pointer;padding:2px 8px;border-radius:50%}
+  .modal-close:hover{color:#fff;background:var(--danger)}
+  .modal-body{overflow:auto;padding:0;flex:1;background:#050c09}
+  .modal-body iframe{width:100%;height:70vh;border:none;background:#333}
+  .modal-body pre{margin:0;padding:14px 16px;font-size:11px;line-height:1.5;color:var(--text-secondary);white-space:pre-wrap;word-break:break-word;font-family:Consolas,Menlo,monospace}
+  .xl-preview-wrap{display:flex;flex-direction:column;height:70vh}
+  .xl-grid-scroll{flex:1;overflow:auto;background:#08150f}
+  .xl-preview-wrap table{border-collapse:collapse;font-family:Consolas,Menlo,monospace;font-size:11px;width:auto;margin:0}
+  .xl-preview-wrap th,.xl-preview-wrap td{border:1px solid var(--border);padding:3px 8px;white-space:nowrap;text-align:left;color:var(--text-secondary)}
+  .xl-preview-wrap td.xl-num{text-align:right;color:var(--text)}
+  .xl-preview-wrap thead th{position:sticky;top:0;background:var(--card-raised);color:var(--gold-bright);z-index:2;text-align:center}
+  .xl-preview-wrap th.xl-rownum{position:sticky;left:0;background:var(--card-raised);color:var(--gold-bright);z-index:1;text-align:center}
+  .xl-preview-wrap th.xl-corner{position:sticky;left:0;top:0;z-index:3;background:var(--card-raised)}
+  .xl-preview-wrap tbody tr:nth-child(even) td{background:rgba(255,255,255,0.025)}
+  .xl-tabs{display:flex;gap:2px;padding:6px 10px 0;background:var(--card-raised);border-top:1px solid var(--border);overflow-x:auto;flex-shrink:0}
+  .xl-tab{padding:5px 12px;font-size:11px;border-radius:6px 6px 0 0;background:var(--card);cursor:pointer;color:var(--text-secondary);
+    border:1px solid var(--border);border-bottom:none;white-space:nowrap;flex-shrink:0}
+  .xl-tab.active{background:var(--felt);color:var(--gold-bright);border-color:var(--gold)}
+  .xl-tab:hover{color:var(--gold-bright)}
+  .modal-body .modal-note{padding:10px 16px;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border);background:var(--card-raised)}
+  .modal-loading{padding:40px;text-align:center;color:var(--text-secondary);font-size:13px}
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <svg class="die-icon" width="34" height="34" viewBox="0 0 20 20" aria-hidden="true">
+    <rect x="1" y="1" width="18" height="18" rx="3" fill="#0b3d2e" stroke="#e8d9a8" stroke-width="1"/>
+    <circle cx="5" cy="5" r="1.6" fill="#e8d9a8"/><circle cx="15" cy="5" r="1.6" fill="#e8d9a8"/>
+    <circle cx="10" cy="10" r="1.6" fill="#e8d9a8"/>
+    <circle cx="5" cy="15" r="1.6" fill="#e8d9a8"/><circle cx="15" cy="15" r="1.6" fill="#e8d9a8"/>
+  </svg>
+  <div>
+    <h1>Monte Carlo Underwriting Agent</h1>
+    <p class="sub">One base case is a guess. Ten thousand is a distribution. Feed in a deck and a model -- get back every driver that actually moves the IRR, a range instead of a single number, and the odds attached to each outcome, all tied out to the real financials before a single path gets run.</p>
+  </div>
+  <div class="chip-row" aria-hidden="true">
+    <div class="chip gold"></div>
+    <div class="chip green"></div>
+    <div class="chip red"></div>
+    <div class="chip black"></div>
+  </div>
+</div>
+
+<div id="landing-view">
+  <section>
+    <div class="hero-graphic" aria-hidden="true">
+      <div class="card-fan">
+        <div class="pcard c1 suit-black"><span>A</span><span>&#9824;</span></div>
+        <div class="pcard c2 suit-red"><span>K</span><span>&#9829;</span></div>
+        <div class="pcard c3 suit-black"><span>Q</span><span>&#9827;</span></div>
+        <div class="pcard c4 suit-red"><span>J</span><span>&#9830;</span></div>
+        <div class="pcard c5 suit-black"><span>10</span><span>&#9824;</span></div>
+      </div>
+    </div>
+    <h2>What this tool does</h2>
+    <div class="description-box">
+      <p>This tool turns a deal's business materials and financial model into a Monte
+      Carlo-simulated LBO view an IC can actually interrogate, instead of a single hand-picked
+      base/upside/downside case.</p>
+      <p style="margin:10px 0 0">How it works, end to end:</p>
+      <ol>
+        <li>Ingest a deck/CIM and the Excel model.</li>
+        <li>Get a first-pass variable card -- P10/P50/P90 ranges, correlations, and binary risk
+        events for whatever actually drives this deal.</li>
+        <li>Challenge and edit the card in conversation, then confirm it.</li>
+        <li>Pull a base-case financial spine (revenue, gross profit, EBITDA, levered FCF, exit)
+        straight from the model -- no invented numbers.</li>
+        <li>Check the deterministic LBO mechanics (entry/exit, debt paydown) tie out to the real
+        Excel model, and fix any assumption that doesn't.</li>
+        <li>Run a 10,000-path Monte Carlo simulation and export an IC-ready slide.</li>
+      </ol>
+      <p style="margin:10px 0 0">Save your work as a project at any point and come back to it
+      later -- nothing is lost between sessions.</p>
+    </div>
+  </section>
+  <section>
+    <div class="toolbar" style="justify-content:center">
+      <button class="primary" id="new-project-btn" style="padding:12px 24px;font-size:14px">&#9824; New Project</button>
+      <button id="open-project-btn" style="padding:12px 24px;font-size:14px">Open Saved Project</button>
+    </div>
+  </section>
+</div>
+
+<div id="projects-list-view" style="display:none">
+  <section>
+    <div class="toolbar">
+      <button id="projects-back-btn">&larr; Back</button>
+    </div>
+    <div id="projects-list-container"></div>
+  </section>
+</div>
+
+<div id="workflow-view" style="display:none">
+<div class="toolbar" style="justify-content:space-between">
+  <div class="toolbar" style="margin:0">
+    <label style="font-size:12px;color:var(--text-secondary)">Project name
+      <input id="project-name-input" placeholder="Untitled project">
+    </label>
+    <button id="save-project-btn">Save project</button>
+    <span id="save-project-status" class="sub" style="margin:0"></span>
+  </div>
+  <div class="toolbar" style="margin:0">
+    <button id="home-btn">Home</button>
+    <button id="restart-btn">Restart</button>
+  </div>
+</div>
+
+<section id="ingest-section">
+  <h2>Stage 1 -- Ingest</h2>
+  <p class="sub" style="margin-bottom:10px">The business-context document can be a draft IC deck, a CIM, management/company materials, or any other document that explains the business -- Claude reviews it thoroughly for whatever bears on Monte Carlo variables, not just a fixed IC-deck template.</p>
+  <div class="toolbar">
+    <label>Business materials (PDF) <input type="file" id="deck-file" accept="application/pdf"></label>
+    <button id="deck-preview-btn" style="display:none">&#128065; Preview</button>
+    <label>Model (.xlsx) <input type="file" id="model-file" accept=".xlsx"></label>
+    <button id="model-preview-btn" style="display:none">&#128065; Preview</button>
+    <button class="primary" id="ingest-btn">Ingest</button>
+  </div>
+  <div id="ingest-status">No documents ingested yet.</div>
+</section>
+
+<div id="doc-preview-overlay" class="modal-overlay" style="display:none">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span class="roulette" aria-hidden="true" style="width:18px;height:18px"></span>
+      <h3 id="doc-preview-title">Document preview</h3>
+      <button class="modal-close" id="doc-preview-close">&times;</button>
+    </div>
+    <div id="doc-preview-note" class="modal-note" style="display:none"></div>
+    <div class="modal-body" id="doc-preview-body"><div class="modal-loading">Loading preview...</div></div>
+  </div>
+</div>
+
+<section id="propose-section" style="display:none">
+  <h2>Stage 2 -- First-pass proposal</h2>
+  <div class="toolbar">
+    <button class="primary" id="propose-btn">Propose variable card</button>
+    <button id="propose-demo-btn">Use demo card (no AI)</button>
+    <span id="propose-status"></span>
+  </div>
+  <p class="sub" style="margin:6px 0 0">No native Claude Code session or API key yet? "Use demo card" fills in placeholder numbers so you can test editing, simulation, and slide export without either -- it is NOT a real proposal, see the banner it adds once used.</p>
+</section>
+
+<section id="card-section" style="display:none">
+  <h2>Stage 4 -- Editable variable card</h2>
+  <div id="demo-banner" style="display:none;background:var(--danger-bg);border:1px solid var(--danger);color:var(--danger);border-radius:var(--radius);padding:8px 12px;font-size:12px;margin-bottom:10px">This card is DEMO DATA, not an AI proposal -- every field says so in its commentary. Replace it with a real Stage 2 proposal before trusting any number on it.</div>
+  <div class="toolbar">
+    <button id="add-var-btn">+ Add variable</button>
+    <button id="add-event-btn">+ Add event</button>
+  </div>
+  <div id="var-container"></div>
+  <h2 style="margin-top:16px">Binary / discrete events</h2>
+  <div id="event-container"></div>
+</section>
+
+<section id="chat-section" style="display:none">
+  <h2>Stage 3 -- Challenge conversation</h2>
+  <div id="chat-log"></div>
+  <div id="chat-status" style="margin-bottom:8px"></div>
+  <div class="chat-input">
+    <textarea id="chat-input" placeholder="Answer Claude's question, or ask your own..."></textarea>
+    <button class="primary" id="chat-send-btn">Send</button>
+  </div>
+</section>
+
+<section id="financials-section" style="display:none">
+  <h2>Stage 5 -- Base case financials</h2>
+  <p class="sub" style="margin-bottom:10px">The 6-row spine of the deal model over its 5-year projection period, pulled from the uploaded materials. Every cell is editable -- fix anything pulled wrong before confirming. This is what the standard LBO chain below flexes: each variable in the card above is mapped (by the same role-matching used for the correlation/distribution logic) onto exactly one of these six rows.</p>
+  <div class="toolbar">
+    <button class="primary" id="extract-financials-btn">Extract from model</button>
+    <button id="extract-financials-demo-btn">Use demo financials (no AI)</button>
+    <span id="financials-status"></span>
+  </div>
+  <div id="financials-demo-banner" style="display:none;background:var(--danger-bg);border:1px solid var(--danger);color:var(--danger);border-radius:var(--radius);padding:8px 12px;font-size:12px;margin-bottom:10px">This spine is DEMO DATA, not pulled from any document -- replace it with a real extraction before trusting any number on it.</div>
+  <div id="financials-grid-container"></div>
+  <div class="toolbar" style="margin-top:10px">
+    <button class="primary" id="confirm-financials-btn">Confirm base case financials</button>
+    <span id="financials-confirmed-status"></span>
+  </div>
+</section>
+
+<section id="lbo-mechanics-section" style="display:none">
+  <h2>Stage 5b -- Confirm LBO mechanics</h2>
+  <p class="sub" style="margin-bottom:10px">A single deterministic run off the confirmed base case -- no sampling, the same chain the Monte Carlo simulation uses with every variable held at its base-case-implied value. Check this against the deal's real Excel LBO tab; edit the assumptions below and recalculate until it ties out.</p>
+  <div class="fixed-grid" id="lbo-public-inputs" style="display:none;margin-bottom:8px">
+    <label>Assumed offer price/share ($) <input id="f-offer-price" type="number" step="any"></label>
+    <label>Diluted shares outstanding (M) <input id="f-diluted-shares" type="number" step="any"></label>
+    <label>Existing net debt at entry ($M) <input id="f-existing-net-debt" type="number" step="any" value="0"></label>
+  </div>
+  <div class="fixed-grid">
+    <label>Deal name <input id="f-deal" placeholder="Deal name"></label>
+    <label>Entry TEV ($M) <input id="f-entry-tev" type="number"></label>
+    <label>Opening debt ($M or x EBITDA) <input id="f-opening-debt" type="number"></label>
+    <label>Interest rate (%) <input id="f-interest-rate" type="number" value="8"></label>
+    <label>Min cash ($M) <input id="f-min-cash" type="number" value="0"></label>
+    <label>Exit multiple (x) <input id="f-exit-multiple" type="number" step="any" placeholder="base case"></label>
+  </div>
+  <p class="sub" id="lbo-exit-multiple-reference" style="margin:6px 0 0"></p>
+  <div class="toolbar" style="margin-top:10px">
+    <span style="font-size:12px;color:var(--text-secondary)">Company type</span>
+    <div class="segmented" id="company-type-segmented">
+      <button type="button" class="seg-btn active" data-type="private">Private</button>
+      <button type="button" class="seg-btn" data-type="public">Public</button>
+    </div>
+    <button id="lbo-extract-btn">Extract LBO assumptions from model</button>
+    <button class="primary" id="lbo-recalc-btn">Recalculate</button>
+    <span id="lbo-status"></span>
+  </div>
+  <p class="sub" style="margin:4px 0 0">Set Company type before clicking "Extract LBO assumptions from model" -- Private pulls Entry TEV directly from the model; Public instead pulls an assumed offer price/share, diluted share count, and existing net debt, and the app computes Entry TEV from those (below).</p>
+  <div id="lbo-extract-notes" class="sub" style="display:none"></div>
+  <div id="lbo-warnings-banner"></div>
+  <h2 style="margin-top:14px">Financial projections</h2>
+  <div id="lbo-projections-table"></div>
+  <h2 style="margin-top:14px">Entry / exit</h2>
+  <div id="lbo-entry-exit-cards"></div>
+  <h2 style="margin-top:14px">Debt paydown schedule</h2>
+  <div id="lbo-debt-schedule-table"></div>
+  <h2 style="margin-top:14px">Assumptions used</h2>
+  <div id="lbo-assumptions-summary"></div>
+  <div class="toolbar" style="margin-top:10px">
+    <label style="font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:6px">
+      <input type="checkbox" id="lbo-sync-exit-multiple-cb" style="width:auto"> Sync exit multiple to Monte Carlo variable card
+    </label>
+    <button class="primary" id="confirm-lbo-btn">Confirm LBO mechanics</button>
+    <span id="lbo-confirmed-status"></span>
+  </div>
+</section>
+
+<section id="simulate-section" style="display:none">
+  <h2 class="roulette-heading"><span class="roulette" aria-hidden="true"></span>Stage 6 -- Run simulation</h2>
+  <div class="toolbar">
+    <button class="primary" id="simulate-btn">Run Monte Carlo</button>
+    <button id="export-slide-btn" disabled>Export IC slide</button>
+  </div>
+  <div id="results"></div>
+  <div class="toolbar" style="margin-top:14px">
+    <button id="narrate-btn" disabled>Explain scenarios in business terms</button>
+    <span id="narrate-status"></span>
+  </div>
+  <div id="scenario-narratives"></div>
+</section>
+
+</div>
+
+<script>
+var FAMILIES = ["market_macro","revenue_build","margin_cost","cash_conversion","exit_structure","discrete_events"];
+var DISTS = ["PERT","lognormal","beta","discrete_pmf","bernoulli","uniform"];
+var TIERS = [[0,"Unrelated"],[0.2,"Loosely related"],[0.4,"Moderately linked"],[0.65,"Strongly linked"],[0.85,"Move together"]];
+var CATEGORIES = ["recession","regulatory","customer_loss","other"];
+var SHOCK_TYPES = ["permanent","temporary_with_recovery"];
+var sessionId = null;
+var varSeq = 0, eventSeq = 0;
+var lastDealConfig = null, lastResults = null, lastScenarioNarratives = null;
+var currentProjectId = null;
+
+function startLoadingStatus(elementId, messages, intervalMs){
+  var el = document.getElementById(elementId);
+  var i = 0;
+  el.innerHTML = '<span class="loading-row"><span class="roulette spin" aria-hidden="true"></span><span class="loading-text"></span></span>';
+  var textEl = el.querySelector('.loading-text');
+  textEl.textContent = messages[0];
+  var timer = setInterval(function(){
+    i = (i + 1) % messages.length;
+    textEl.textContent = messages[i];
+  }, intervalMs || 1800);
+  return function stop(){ clearInterval(timer); };
+}
+
+function opts(list, sel){
+  return list.map(function(o){
+    var val = Array.isArray(o) ? o[0] : o;
+    var label = Array.isArray(o) ? o[1] : o;
+    return '<option value="'+val+'"'+(String(val)===String(sel)?' selected':'')+'>'+label+'</option>';
+  }).join('');
+}
+
+function allVarIds(exceptEl){
+  var ids = [];
+  document.querySelectorAll('#var-container .vcard').forEach(function(c){
+    if (c !== exceptEl) ids.push(c.getAttribute('data-id'));
+  });
+  return ids;
+}
+
+function refreshCorrOptions(){
+  document.querySelectorAll('#var-container .vcard').forEach(function(card){
+    var sel = card.querySelector('[data-f=corr_with]');
+    if (!sel) return;
+    var current = sel.value;
+    var others = allVarIds(card);
+    sel.innerHTML = '<option value="">None</option>' + others.map(function(id){
+      return '<option value="'+id+'"'+(id===current?' selected':'')+'>'+id+'</option>';
+    }).join('');
+    if (current && others.indexOf(current) === -1) sel.value = '';
+  });
+}
+
+function guessUnit(name){
+  var n = (name || '').toLowerCase();
+  if (n.indexOf('multiple') !== -1 || n.indexOf('turns') !== -1) return 'x';
+  if (n.indexOf('%') !== -1 || n.indexOf('margin') !== -1 || n.indexOf('growth') !== -1 || n.indexOf('cagr') !== -1 ||
+      n.indexOf('rate') !== -1 || n.indexOf('churn') !== -1 || n.indexOf('retention') !== -1) return '%';
+  return '';
+}
+
+function refreshDistPreview(cardDiv){
+  var chartEl = cardDiv.querySelector('.dist-chart-render');
+  var captionEl = cardDiv.querySelector('.dist-caption');
+  if (!chartEl) return; // event cards have no chart panel
+  var g = function(f){ var el = cardDiv.querySelector('[data-f='+f+']'); return el ? el.value : ''; };
+  var dist = g('dist');
+  var p10 = g('p10'), p50 = g('p50'), p90 = g('p90');
+  if (p50 === '') {
+    chartEl.innerHTML = '<div class="dist-placeholder">Fill in P10/P50/P90 to preview</div>';
+    captionEl.textContent = '';
+    return;
+  }
+  clearTimeout(cardDiv._distPreviewTimer);
+  cardDiv._distPreviewTimer = setTimeout(function(){
+    var body = {
+      distribution: dist,
+      p10: p10 === '' ? null : parseFloat(p10),
+      p50: parseFloat(p50),
+      p90: p90 === '' ? null : parseFloat(p90),
+      bounds: [null, null],
+    };
+    fetch('/api/distribution-preview', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)})
+      .then(function(res){ return res.json().then(function(data){ return {ok: res.ok, data: data}; }); })
+      .then(function(r){
+        if (!r.ok) throw new Error(r.data.detail || 'preview failed');
+        var unit = guessUnit(cardDiv.querySelector('.vname').value);
+        renderHistogramSVG(chartEl, r.data, {
+          width: 210, height: 130,
+          xLabel: unit || 'Value', yLabel: 'Frequency',
+          fmtX: function(v){ return v.toFixed(1) + unit; },
+          color: '#d4af53',
+        });
+        captionEl.textContent = dist + ' -- P10 ' + p10 + ' / P50 ' + p50 + ' / P90 ' + p90;
+      })
+      .catch(function(e){
+        chartEl.innerHTML = '<div class="dist-placeholder">' + e.message + '</div>';
+        captionEl.textContent = '';
+      });
+  }, 300);
+}
+
+function createCard(d){
+  d = d || {};
+  var id = d.id || ('new_var_' + (++varSeq));
+  var el = document.getElementById('elicitation');
+  var p10 = d.elicitation ? d.elicitation[0] : d.p10;
+  var p50 = d.elicitation ? d.elicitation[1] : d.p50;
+  var p90 = d.elicitation ? d.elicitation[2] : d.p90;
+  var div = document.createElement('div');
+  div.className = 'vcard';
+  div.setAttribute('data-id', id);
+  div.innerHTML =
+    '<div class="vcard-main">' +
+    '<div class="vcard-head"><input class="vname" value="'+(d.name||'New variable')+'"><button class="del-btn">&times;</button></div>' +
+    '<span class="cite"><input data-f="source" value="'+(d.source||'').replace(/"/g,'&quot;')+'" placeholder="Source"></span>' +
+    '<div class="grid">' +
+      '<label>Family<select data-f="family">'+opts(FAMILIES, d.family||'revenue_build')+'</select></label>' +
+      '<label>Distribution<select data-f="dist">'+opts(DISTS, d.distribution||'PERT')+'</select></label>' +
+      '<label>Correlated with<select data-f="corr_with"></select></label>' +
+      '<label>Tier<select data-f="corr_tier">'+opts(TIERS, d.correlated_with && d.correlated_with.value!=null ? String(d.correlated_with.value) : '0')+'</select></label>' +
+    '</div>' +
+    '<div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">' +
+      '<label>P10<input type="number" data-f="p10" class="'+(p10==null?'needs':'')+'" value="'+(p10!=null?p10:'')+'" step="any"></label>' +
+      '<label>P50<input type="number" data-f="p50" class="'+(p50==null?'needs':'')+'" value="'+(p50!=null?p50:'')+'" step="any"></label>' +
+      '<label>P90<input type="number" data-f="p90" class="'+(p90==null?'needs':'')+'" value="'+(p90!=null?p90:'')+'" step="any"></label>' +
+    '</div>' +
+    '<label style="font-size:11px;color:var(--text-secondary)">Commentary' +
+      '<textarea class="commentary" data-f="commentary">'+(d.commentary||'')+'</textarea>' +
+    '</label>' +
+    '</div>' +
+    '<div class="vcard-chart"><div class="dist-chart-render"></div><div class="dist-caption"></div></div>';
+  div.dataset.intendedCorr = (d.correlated_with && d.correlated_with.variable) || '';
+  div.dataset.unit = d.unit || '';
+  div.querySelector('.del-btn').addEventListener('click', function(){ div.remove(); refreshCorrOptions(); });
+  document.getElementById('var-container').appendChild(div);
+  var distPreviewFields = div.querySelectorAll('[data-f=dist], [data-f=p10], [data-f=p50], [data-f=p90]');
+  distPreviewFields.forEach(function(el){ el.addEventListener('input', function(){ refreshDistPreview(div); }); });
+  refreshDistPreview(div);
+  refreshCorrOptions();
+  return div;
+}
+
+function finalizeCorrelations(){
+  document.querySelectorAll('#var-container .vcard').forEach(function(card){
+    var intended = card.dataset.intendedCorr;
+    if (intended) card.querySelector('[data-f=corr_with]').value = intended;
+  });
+}
+
+function createEventCard(d){
+  d = d || {};
+  var id = d.id || ('event_' + (++eventSeq));
+  var isTemp = d.shock_type === 'temporary_with_recovery';
+  var impact = d.impact || {};
+  var acute = d.acute_impact || {};
+  var div = document.createElement('div');
+  div.className = 'vcard';
+  div.setAttribute('data-event-id', id);
+  div.innerHTML =
+    '<div class="vcard-main">' +
+    '<div class="vcard-head"><input class="vname" value="'+(d.name||'New event')+'"><button class="del-btn">&times;</button></div>' +
+    '<span class="cite"><input data-f="source" value="'+(d.source||'').replace(/"/g,'&quot;')+'" placeholder="Source"></span>' +
+    '<div class="grid">' +
+      '<label>Category<select data-f="category">'+opts(CATEGORIES, d.category||'other')+'</select></label>' +
+      '<label>Shock type<select data-f="shock_type">'+opts(SHOCK_TYPES, d.shock_type||'permanent')+'</select></label>' +
+      '<label>P(no fire)<input type="number" data-f="p_success" class="estimate" value="'+(d.p_success!=null?d.p_success:'')+'" min="0" max="1" step="0.05"></label>' +
+    '</div>' +
+    '<div class="acute-block" style="display:'+(isTemp?'block':'none')+';background:var(--danger-bg);border-radius:8px;padding:8px;margin-bottom:8px">' +
+      '<div class="grid" style="grid-template-columns:repeat(4,minmax(0,1fr))">' +
+        '<label>Acute rev %<input type="number" data-f="acute_rev" value="'+(acute.revenue_pct!=null?acute.revenue_pct:'')+'" step="0.5"></label>' +
+        '<label>Acute margin pp<input type="number" data-f="acute_margin" value="'+(acute.margin_pct!=null?acute.margin_pct:'')+'" step="0.5"></label>' +
+        '<label>Acute FCF %<input type="number" data-f="acute_fcf" value="'+(acute.fcf_pct!=null?acute.fcf_pct:'')+'" step="0.5"></label>' +
+        '<label>Duration (yrs)<input type="number" data-f="acute_duration" value="'+(acute.duration_years!=null?acute.duration_years:'')+'" step="0.25"></label>' +
+      '</div>' +
+    '</div>' +
+    '<div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">' +
+      '<label>Revenue %<input type="number" data-f="rev_impact" value="'+(impact.revenue_pct!=null?impact.revenue_pct:'')+'" step="0.5"></label>' +
+      '<label>Margin pp<input type="number" data-f="margin_impact" value="'+(impact.margin_pct!=null?impact.margin_pct:'')+'" step="0.5"></label>' +
+      '<label>FCF %<input type="number" data-f="fcf_impact" value="'+(impact.fcf_pct!=null?impact.fcf_pct:'')+'" step="0.5"></label>' +
+    '</div>' +
+    '<label style="font-size:11px;color:var(--text-secondary)">Commentary' +
+      '<textarea class="commentary" data-f="commentary">'+(d.commentary||'')+'</textarea>' +
+    '</label>' +
+    '</div>';
+  div.querySelector('.del-btn').addEventListener('click', function(){ div.remove(); });
+  div.querySelector('[data-f=shock_type]').addEventListener('change', function(e){
+    div.querySelector('.acute-block').style.display = (e.target.value === 'temporary_with_recovery') ? 'block' : 'none';
+  });
+  document.getElementById('event-container').appendChild(div);
+  return div;
+}
+
+document.getElementById('add-var-btn').addEventListener('click', function(){ createCard({}); });
+document.getElementById('add-event-btn').addEventListener('click', function(){ createEventCard({}); });
+
+function buildDealConfig(){
+  var variables = [];
+  var correlations = [];
+  document.querySelectorAll('#var-container .vcard').forEach(function(card){
+    var g = function(f){ var el = card.querySelector('[data-f='+f+']'); return el ? el.value : null; };
+    var id = card.getAttribute('data-id');
+    var corrWith = g('corr_with');
+    var corrTier = parseFloat(g('corr_tier'));
+    variables.push({
+      id: id,
+      name: card.querySelector('.vname').value,
+      family: g('family'),
+      distribution: g('dist'),
+      p10: g('p10') === '' ? null : parseFloat(g('p10')),
+      p50: g('p50') === '' ? null : parseFloat(g('p50')),
+      p90: g('p90') === '' ? null : parseFloat(g('p90')),
+      bounds: [null, null],
+      source: g('source'),
+      commentary: g('commentary'),
+      unit: card.dataset.unit || undefined,
+      correlated_with: corrWith ? {variable: corrWith, value: corrTier} : null,
+    });
+    if (corrWith) {
+      var pair = [id, corrWith].sort();
+      if (!correlations.some(function(c){ return c.pair[0]===pair[0] && c.pair[1]===pair[1]; })) {
+        correlations.push({pair: pair, value: corrTier});
+      }
+    }
+  });
+
+  var binary_events = [];
+  document.querySelectorAll('#event-container .vcard').forEach(function(card){
+    var g = function(f){ var el = card.querySelector('[data-f='+f+']'); return el ? el.value : null; };
+    var shockType = g('shock_type') || 'permanent';
+    var ev = {
+      id: card.getAttribute('data-event-id'),
+      name: card.querySelector('.vname').value,
+      category: g('category'),
+      shock_type: shockType,
+      probability: g('p_success') === '' ? null : parseFloat(g('p_success')),
+      source: g('source'),
+      impact: {
+        revenue_pct: g('rev_impact') === '' ? null : parseFloat(g('rev_impact')),
+        margin_pct: g('margin_impact') === '' ? null : parseFloat(g('margin_impact')),
+        fcf_pct: g('fcf_impact') === '' ? null : parseFloat(g('fcf_impact')),
+      },
+    };
+    if (shockType === 'temporary_with_recovery') {
+      ev.acute_impact = {
+        revenue_pct: g('acute_rev') === '' ? null : parseFloat(g('acute_rev')),
+        margin_pct: g('acute_margin') === '' ? null : parseFloat(g('acute_margin')),
+        fcf_pct: g('acute_fcf') === '' ? null : parseFloat(g('acute_fcf')),
+        duration_years: g('acute_duration') === '' ? null : parseFloat(g('acute_duration')),
+      };
+    }
+    binary_events.push(ev);
+  });
+
+  var fixed = {
+    entry_tev: parseFloat(document.getElementById('f-entry-tev').value) || undefined,
+    opening_debt: parseFloat(document.getElementById('f-opening-debt').value) || undefined,
+    tax_rate: 25,
+    effective_interest_rate_pct: parseFloat(document.getElementById('f-interest-rate').value) || 8,
+    min_cash: parseFloat(document.getElementById('f-min-cash').value) || 0,
+  };
+
+  return {
+    deal: document.getElementById('f-deal').value || 'Untitled deal',
+    variables: variables,
+    correlations: correlations,
+    binary_events: binary_events,
+    fixed_assumptions: fixed,
+    base_case_financials: readFinancialsGrid(),
+  };
+}
+
+// --- Pre-ingest document preview modal ---
+var docPreviewBlobUrl = null;
+
+function closeDocPreviewModal(){
+  document.getElementById('doc-preview-overlay').style.display = 'none';
+  document.getElementById('doc-preview-body').innerHTML = '';
+  if (docPreviewBlobUrl) { URL.revokeObjectURL(docPreviewBlobUrl); docPreviewBlobUrl = null; }
+}
+
+function openDocPreviewModal(wide){
+  document.querySelector('.modal-box').classList.toggle('wide', !!wide);
+  document.getElementById('doc-preview-overlay').style.display = 'flex';
+}
+
+async function previewDeckFile(file){
+  document.getElementById('doc-preview-title').textContent = 'Business materials preview -- ' + file.name;
+  document.getElementById('doc-preview-note').style.display = 'block';
+  document.getElementById('doc-preview-note').innerHTML =
+    'Native PDF viewer -- this is the actual file, not an extraction. If the preview below looks blank ' +
+    '(some browsers are set to download PDFs instead of previewing them), use ' +
+    '<a href="#" id="doc-preview-open-tab" style="color:var(--gold-bright)">Open in a new tab</a> instead.';
+  document.getElementById('doc-preview-body').innerHTML = '<div class="modal-loading">Loading preview...</div>';
+  openDocPreviewModal(true);
+  if (docPreviewBlobUrl) URL.revokeObjectURL(docPreviewBlobUrl);
+  docPreviewBlobUrl = URL.createObjectURL(file);
+  document.getElementById('doc-preview-body').innerHTML = '<iframe src="' + docPreviewBlobUrl + '" title="' + escapeHtml(file.name) + '"></iframe>';
+  document.getElementById('doc-preview-open-tab').addEventListener('click', function(e){
+    e.preventDefault();
+    window.open(docPreviewBlobUrl, '_blank');
+  });
+}
+
+var lastExcelPreview = null, activeExcelSheetIdx = 0;
+
+function renderExcelSheetTable(sheet){
+  var html = '<table><thead><tr><th class="xl-corner"></th>';
+  sheet.col_letters.forEach(function(l){ html += '<th>' + l + '</th>'; });
+  html += '</tr></thead><tbody>';
+  sheet.rows.forEach(function(row, i){
+    html += '<tr><th class="xl-rownum">' + sheet.row_numbers[i] + '</th>';
+    row.forEach(function(cell){
+      var isNum = cell !== '' && !isNaN(cell.replace(/,/g, ''));
+      html += '<td' + (isNum ? ' class="xl-num"' : '') + '>' + escapeHtml(cell) + '</td>';
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  return html;
+}
+
+function renderActiveExcelSheet(){
+  var data = lastExcelPreview;
+  var sheet = data.sheets[activeExcelSheetIdx];
+  var tabsHtml = data.sheets.map(function(s, i){
+    return '<div class="xl-tab' + (i === activeExcelSheetIdx ? ' active' : '') + '" data-idx="' + i + '">' + escapeHtml(s.name) + '</div>';
+  }).join('');
+  var noteBits = [];
+  if (sheet.truncated_cols) noteBits.push('columns truncated');
+  if (sheet.truncated_rows) noteBits.push('rows truncated');
+  if (data.sheets.length < data.sheet_names_all.length) noteBits.push((data.sheet_names_all.length - data.sheets.length) + ' more sheet(s) not shown');
+  document.getElementById('doc-preview-note').textContent =
+    'Lightweight visual preview -- top-left corner of each sheet, financial-statement tabs prioritized' +
+    (noteBits.length ? ' (' + noteBits.join(', ') + ')' : '') + '. Not the full extraction Stage 1 ingest reads.';
+  document.getElementById('doc-preview-body').innerHTML =
+    '<div class="xl-preview-wrap"><div class="xl-grid-scroll">' + renderExcelSheetTable(sheet) + '</div>' +
+    '<div class="xl-tabs">' + tabsHtml + '</div></div>';
+  document.querySelectorAll('.xl-tab').forEach(function(tab){
+    tab.addEventListener('click', function(){
+      activeExcelSheetIdx = parseInt(tab.getAttribute('data-idx'), 10);
+      renderActiveExcelSheet();
+    });
+  });
+}
+
+async function previewModelFile(file){
+  document.getElementById('doc-preview-title').textContent = 'Model preview -- ' + file.name;
+  document.getElementById('doc-preview-note').style.display = 'block';
+  document.getElementById('doc-preview-note').textContent = 'Reading workbook...';
+  document.getElementById('doc-preview-body').innerHTML = '<div class="modal-loading">Reading workbook...</div>';
+  openDocPreviewModal(true);
+  var fd = new FormData();
+  fd.append('model', file);
+  try {
+    var res = await fetch('/api/preview-excel', {method: 'POST', body: fd});
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'preview failed');
+    if (!data.sheets.length) throw new Error('workbook has no readable sheets');
+    lastExcelPreview = data;
+    activeExcelSheetIdx = 0;
+    renderActiveExcelSheet();
+  } catch (e) {
+    document.getElementById('doc-preview-body').innerHTML = '<div class="modal-loading">Error: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+document.getElementById('doc-preview-close').addEventListener('click', closeDocPreviewModal);
+document.getElementById('doc-preview-overlay').addEventListener('click', function(e){
+  if (e.target === this) closeDocPreviewModal();
+});
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape' && document.getElementById('doc-preview-overlay').style.display !== 'none') closeDocPreviewModal();
+});
+
+document.getElementById('deck-file').addEventListener('change', function(){
+  var file = this.files[0];
+  document.getElementById('deck-preview-btn').style.display = file ? 'inline-block' : 'none';
+  if (file) previewDeckFile(file);
+});
+document.getElementById('deck-preview-btn').addEventListener('click', function(){
+  var file = document.getElementById('deck-file').files[0];
+  if (file) previewDeckFile(file);
+});
+document.getElementById('model-file').addEventListener('change', function(){
+  var file = this.files[0];
+  document.getElementById('model-preview-btn').style.display = file ? 'inline-block' : 'none';
+  if (file) previewModelFile(file);
+});
+document.getElementById('model-preview-btn').addEventListener('click', function(){
+  var file = document.getElementById('model-file').files[0];
+  if (file) previewModelFile(file);
+});
+
+document.getElementById('ingest-btn').addEventListener('click', async function(){
+  var deckFile = document.getElementById('deck-file').files[0];
+  var modelFile = document.getElementById('model-file').files[0];
+  if (!deckFile && !modelFile) { alert('Choose at least one file.'); return; }
+  var fd = new FormData();
+  if (deckFile) fd.append('deck', deckFile);
+  if (modelFile) fd.append('model', modelFile);
+  document.getElementById('ingest-status').textContent = 'Ingesting...';
+  try {
+    var res = await fetch('/api/ingest', {method:'POST', body: fd});
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'ingest failed');
+    sessionId = data.session_id;
+    document.getElementById('ingest-status').textContent =
+      'Ingested ' + data.ingested_chars + ' chars' + (data.truncated ? ' (truncated to budget)' : '') + '. Session: ' + sessionId;
+    document.getElementById('propose-section').style.display = 'block';
+  } catch (e) {
+    document.getElementById('ingest-status').textContent = 'Error: ' + e.message;
+  }
+});
+
+function renderCard(card, isDemo){
+  document.getElementById('demo-banner').style.display = isDemo ? 'block' : 'none';
+  document.getElementById('f-deal').value = card.deal || '';
+  document.getElementById('var-container').innerHTML = '';
+  document.getElementById('event-container').innerHTML = '';
+  (card.variables||[]).forEach(function(v){ createCard(v); });
+  (card.binary_events||[]).forEach(function(ev){ createEventCard(ev); });
+  finalizeCorrelations();
+  document.getElementById('card-section').style.display = 'block';
+  document.getElementById('chat-section').style.display = 'block';
+  document.getElementById('financials-section').style.display = 'block';
+}
+
+var PROPOSE_LOADING_MESSAGES = [
+  'Reading the deck and model...',
+  'Reviewing the business and its drivers...',
+  'Screening for recession, regulatory, and customer-loss risk...',
+  'Thinking through ranges, distributions, and correlations...',
+  'Drafting the first-pass variable card...',
+];
+
+document.getElementById('propose-btn').addEventListener('click', async function(){
+  if (!sessionId) { alert('Ingest documents first.'); return; }
+  var stop = startLoadingStatus('propose-status', PROPOSE_LOADING_MESSAGES);
+  try {
+    var res = await fetch('/api/propose', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({session_id: sessionId})});
+    var card = await res.json();
+    stop();
+    if (!res.ok) throw new Error(card.detail || 'propose failed');
+    document.getElementById('propose-status').textContent = 'Proposal received: ' + card.variables.length + ' variables, ' + card.binary_events.length + ' events.';
+    renderCard(card, false);
+  } catch (e) {
+    stop();
+    document.getElementById('propose-status').textContent = 'Error: ' + e.message;
+  }
+});
+
+document.getElementById('propose-demo-btn').addEventListener('click', async function(){
+  document.getElementById('propose-status').textContent = 'Loading demo card (no AI call)...';
+  try {
+    var res = await fetch('/api/propose-demo', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({session_id: sessionId, deal_name: document.getElementById('f-deal').value || null})});
+    var card = await res.json();
+    if (!res.ok) throw new Error(card.detail || 'demo card failed');
+    sessionId = card.session_id || sessionId;
+    document.getElementById('propose-status').textContent = 'Demo card loaded (' + card.variables.length + ' variables, ' + card.binary_events.length + ' events) -- not AI-generated.';
+    renderCard(card, true);
+  } catch (e) {
+    document.getElementById('propose-status').textContent = 'Error: ' + e.message;
+  }
+});
+
+function appendChatMsg(role, text){
+  var div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.textContent = text;
+  document.getElementById('chat-log').appendChild(div);
+  div.scrollIntoView();
+}
+
+// --- Stage 5: base case financials grid ---
+var FIN_ROWS = [
+  {key: 'revenue', label: 'Revenue ($M)', annot: 'growth'},
+  {key: 'gross_profit', label: 'Gross profit ($M)', annot: 'margin'},
+  {key: 'ebitda', label: 'EBITDA ($M)', annot: 'margin'},
+  {key: 'levered_fcf', label: 'Levered FCF ($M)', annot: null},
+];
+var lastFinancials = null;
+
+function fmtPct(x){ return isFinite(x) ? (x*100).toFixed(1)+'%' : '--'; }
+
+function updateFinAnnotations(){
+  var years = document.querySelectorAll('#financials-grid-container th.fin-year').length;
+  FIN_ROWS.forEach(function(row){
+    if (!row.annot) return;
+    var inputs = document.querySelectorAll('#fin-row-'+row.key+' input.fin-cell');
+    var vals = Array.from(inputs).map(function(el){ return el.value === '' ? null : parseFloat(el.value); });
+    var revInputs = row.key === 'revenue' ? inputs : document.querySelectorAll('#fin-row-revenue input.fin-cell');
+    var revVals = Array.from(revInputs).map(function(el){ return el.value === '' ? null : parseFloat(el.value); });
+    var annots = document.querySelectorAll('#fin-row-'+row.key+' .fin-annot');
+    vals.forEach(function(v, i){
+      var text = '';
+      if (v != null) {
+        if (row.annot === 'growth' && i > 0 && vals[i-1]) {
+          text = fmtPct(v/vals[i-1] - 1);
+        } else if (row.annot === 'margin' && revVals[i]) {
+          text = fmtPct(v/revVals[i]);
+        }
+      }
+      if (annots[i]) annots[i].textContent = text;
+    });
+  });
+}
+
+function round1(v){ return Math.round(v * 10) / 10; }
+
+function renderFinancialsGrid(data, isDemo){
+  document.getElementById('financials-demo-banner').style.display = isDemo ? 'block' : 'none';
+  lastFinancials = data;
+  var years = data.fiscal_years;
+  var exitIdx = data.exit_year_index != null ? data.exit_year_index : years.length - 1;
+  var html = '<table><tr><th>Line item</th>' + years.map(function(y){ return '<th class="fin-year">'+y+'</th>'; }).join('') + '</tr>';
+  FIN_ROWS.forEach(function(row){
+    html += '<tr id="fin-row-'+row.key+'"><td>'+row.label+'</td>';
+    years.forEach(function(y, i){
+      var v = (data[row.key] && data[row.key][i] != null) ? round1(data[row.key][i]) : '';
+      html += '<td><input type="number" class="fin-cell" data-year="'+i+'" value="'+v+'" step="any" style="width:100%;box-sizing:border-box"><div class="fin-annot" style="font-size:10px;color:var(--text-muted)"></div></td>';
+    });
+    html += '</tr>';
+  });
+  ['exit_valuation', 'proceeds_to_fp'].forEach(function(key){
+    var label = key === 'exit_valuation' ? 'Exit valuation ($M)' : 'Proceeds to FP ($M)';
+    html += '<tr id="fin-row-'+key+'"><td>'+label+'</td>';
+    years.forEach(function(y, i){
+      if (i === exitIdx) {
+        var v = data[key] != null ? round1(data[key]) : '';
+        html += '<td><input type="number" class="fin-cell fin-exit-cell" value="'+v+'" step="any" style="width:100%;box-sizing:border-box"></td>';
+      } else {
+        html += '<td style="color:var(--text-muted);text-align:center">--</td>';
+      }
+    });
+    html += '</tr>';
+  });
+  html += '</table>';
+  if (data.source_notes) {
+    html += '<p class="sub" style="margin-top:8px"><strong>Source notes (from extraction):</strong> ' + data.source_notes + '</p>';
+  }
+  document.getElementById('financials-grid-container').innerHTML = html;
+  document.querySelectorAll('#financials-grid-container input.fin-cell').forEach(function(el){
+    el.addEventListener('input', updateFinAnnotations);
+  });
+  updateFinAnnotations();
+}
+
+function readFinancialsGrid(){
+  if (!lastFinancials) return null;
+  var years = lastFinancials.fiscal_years;
+  var exitIdx = lastFinancials.exit_year_index != null ? lastFinancials.exit_year_index : years.length - 1;
+  var out = {fiscal_years: years, exit_year_index: exitIdx};
+  FIN_ROWS.forEach(function(row){
+    var inputs = document.querySelectorAll('#fin-row-'+row.key+' input.fin-cell');
+    out[row.key] = Array.from(inputs).map(function(el){ return el.value === '' ? null : parseFloat(el.value); });
+  });
+  ['exit_valuation', 'proceeds_to_fp'].forEach(function(key){
+    var el = document.querySelector('#fin-row-'+key+' input.fin-exit-cell');
+    out[key] = el && el.value !== '' ? parseFloat(el.value) : null;
+  });
+  return out;
+}
+
+var FINANCIALS_LOADING_MESSAGES = [
+  'Reading the model...',
+  'Finding the Summary and Financial Model tabs...',
+  'Checking the Operating Case is set to FP Base Case...',
+  'Cross-checking the two tabs tie out...',
+  'Pulling Revenue, Gross Profit, EBITDA, and FCF by year...',
+];
+
+document.getElementById('extract-financials-btn').addEventListener('click', async function(){
+  if (!sessionId) { alert('Ingest documents first.'); return; }
+  var stop = startLoadingStatus('financials-status', FINANCIALS_LOADING_MESSAGES);
+  try {
+    var res = await fetch('/api/extract-financials', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({session_id: sessionId})});
+    var data = await res.json();
+    stop();
+    if (!res.ok) throw new Error(data.detail || 'extraction failed');
+    document.getElementById('financials-status').textContent = 'Extracted. Review every cell before confirming.';
+    renderFinancialsGrid(data, false);
+  } catch (e) {
+    stop();
+    document.getElementById('financials-status').textContent = 'Error: ' + e.message;
+  }
+});
+
+document.getElementById('extract-financials-demo-btn').addEventListener('click', async function(){
+  document.getElementById('financials-status').textContent = 'Loading demo financials (no AI call)...';
+  try {
+    var res = await fetch('/api/extract-financials-demo', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({session_id: sessionId, deal_name: document.getElementById('f-deal').value || null})});
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'demo financials failed');
+    sessionId = data.session_id || sessionId;
+    document.getElementById('financials-status').textContent = 'Demo financials loaded -- not extracted from any document.';
+    renderFinancialsGrid(data, true);
+  } catch (e) {
+    document.getElementById('financials-status').textContent = 'Error: ' + e.message;
+  }
+});
+
+document.getElementById('confirm-financials-btn').addEventListener('click', function(){
+  if (!lastFinancials) { alert('Extract or load demo financials first.'); return; }
+  var gridErr = validateFinancialsGrid(readFinancialsGrid());
+  if (gridErr) { document.getElementById('financials-confirmed-status').textContent = gridErr; return; }
+  document.getElementById('financials-confirmed-status').textContent = 'Base case financials confirmed.';
+  document.getElementById('lbo-mechanics-section').style.display = 'block';
+  seedExitMultipleField();
+  runLboPreview();
+});
+
+// --- Stage 5b: LBO mechanics preview (one deterministic run off the confirmed base case) ---
+var lastLboPreview = null;
+var LBO_LOADING_MESSAGES = [
+  'Running the deterministic base case...',
+  'Building the debt paydown schedule...',
+  'Checking the entry/exit math...',
+];
+
+function findExitMultipleCard(){
+  var cards = document.querySelectorAll('#var-container .vcard');
+  for (var i = 0; i < cards.length; i++) {
+    var id = (cards[i].getAttribute('data-id') || '').toLowerCase();
+    if (id.indexOf('exit_multiple') !== -1) return cards[i];
+  }
+  return null;
+}
+
+function seedExitMultipleField(){
+  var card = findExitMultipleCard();
+  var ref = document.getElementById('lbo-exit-multiple-reference');
+  if (card) {
+    var p50El = card.querySelector('[data-f=p50]');
+    var p50 = p50El ? p50El.value : '';
+    ref.textContent = p50 !== '' ? ('Monte Carlo variable card P50 for comparison: ' + p50 + 'x') : '';
+  } else {
+    ref.textContent = '';
+  }
+}
+
+// --- Stage 5b: public-company entry TEV, driven from an assumed offer price per share ---
+// Entry TEV = offer price/share x diluted shares outstanding + existing net debt at entry (a
+// standard equity-value-to-enterprise-value bridge for a take-private). "Existing net debt" here
+// is the target's OWN balance-sheet debt as of signing -- distinct from "Opening debt" above, which
+// is the NEW debt the buyer puts on to fund the LBO.
+function isPublicCompanyMode(){
+  var active = document.querySelector('#company-type-segmented .seg-btn.active');
+  return !!active && active.getAttribute('data-type') === 'public';
+}
+
+function setPublicCompanyMode(on){
+  document.querySelectorAll('#company-type-segmented .seg-btn').forEach(function(btn){
+    btn.classList.toggle('active', (btn.getAttribute('data-type') === 'public') === !!on);
+  });
+  document.getElementById('lbo-public-inputs').style.display = on ? 'grid' : 'none';
+  document.getElementById('f-entry-tev').disabled = !!on;
+  document.getElementById('f-entry-tev').title = on ? 'Computed: offer price/share x diluted shares + existing net debt' : '';
+  if (on) recomputePublicEntryTev();
+}
+
+function recomputePublicEntryTev(){
+  if (!isPublicCompanyMode()) return;
+  var price = parseFloat(document.getElementById('f-offer-price').value);
+  var shares = parseFloat(document.getElementById('f-diluted-shares').value);
+  var netDebt = parseFloat(document.getElementById('f-existing-net-debt').value) || 0;
+  var tevInput = document.getElementById('f-entry-tev');
+  tevInput.value = (!isNaN(price) && !isNaN(shares)) ? (price * shares + netDebt).toFixed(1) : '';
+}
+
+document.querySelectorAll('#company-type-segmented .seg-btn').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    setPublicCompanyMode(btn.getAttribute('data-type') === 'public');
+  });
+});
+['f-offer-price', 'f-diluted-shares', 'f-existing-net-debt'].forEach(function(id){
+  document.getElementById(id).addEventListener('input', recomputePublicEntryTev);
+});
+
+function renderLboProjections(data){
+  var rows = data.year_detail || [];
+  var html = '<table><tr><th>Fiscal year</th><th>Revenue ($M)</th><th>Gross profit ($M)</th><th>Gross margin</th><th>EBITDA ($M)</th><th>EBITDA margin</th><th>Levered FCF ($M)</th></tr>';
+  rows.forEach(function(r){
+    html += '<tr><td>'+r.fiscal_year+'</td><td>'+r.revenue.toFixed(1)+'</td><td>'+r.gross_profit.toFixed(1)+'</td><td>'+r.gross_margin_pct.toFixed(1)+'%</td><td>'+r.ebitda.toFixed(1)+'</td><td>'+r.ebitda_margin_pct.toFixed(1)+'%</td><td>'+r.levered_fcf.toFixed(1)+'</td></tr>';
+  });
+  html += '</table>';
+  document.getElementById('lbo-projections-table').innerHTML = html;
+}
+
+function renderLboEntryExit(data){
+  var e = data.entry, x = data.exit, ret = data.returns;
+  var html = '<div class="stat-grid" style="grid-template-columns:repeat(4,minmax(0,1fr))">' +
+    statCard('Entry TEV', '$'+e.tev.toFixed(0)+'M') +
+    statCard('Entry opening debt', '$'+e.opening_debt.toFixed(0)+'M') +
+    statCard('Entry equity', '$'+e.entry_equity.toFixed(0)+'M') +
+    statCard('Entry leverage', (e.leverage_x_ebitda != null ? e.leverage_x_ebitda.toFixed(1)+'x' : '--')) +
+    statCard('Exit ('+x.fiscal_year+') EBITDA', '$'+x.ebitda.toFixed(0)+'M') +
+    statCard('Exit multiple', x.multiple.toFixed(2)+'x') +
+    statCard('Exit valuation', '$'+x.exit_valuation.toFixed(0)+'M') +
+    statCard('Proceeds to FP', '$'+x.proceeds_to_fp.toFixed(0)+'M') +
+    statCard('Implied IRR', ret.irr_pct.toFixed(1)+'%') +
+    statCard('Implied MoIC', ret.moic.toFixed(2)+'x') +
+    '</div>';
+  document.getElementById('lbo-entry-exit-cards').innerHTML = html;
+}
+
+function renderLboDebtSchedule(data){
+  var rows = data.year_detail || [];
+  var html = '<table><tr><th>Fiscal year</th><th>Opening debt ($M)</th><th>Interest expense ($M)</th><th>Principal paydown ($M)</th><th>Ending debt ($M)</th><th>Cumulative cash ($M)</th></tr>';
+  rows.forEach(function(r){
+    html += '<tr><td>'+r.fiscal_year+'</td><td>'+r.opening_debt.toFixed(1)+'</td><td>'+r.interest_expense.toFixed(1)+'</td><td>'+r.principal_paydown.toFixed(1)+'</td><td>'+r.ending_debt.toFixed(1)+'</td><td>'+r.cumulative_cash.toFixed(1)+'</td></tr>';
+  });
+  html += '</table>';
+  document.getElementById('lbo-debt-schedule-table').innerHTML = html;
+}
+
+function renderLboAssumptions(data){
+  var a = data.assumptions_used;
+  var html = '<table><tr><th>Assumption</th><th>Value</th></tr>' +
+    '<tr><td>Entry TEV</td><td>$'+a.entry_tev.toFixed(1)+'M</td></tr>' +
+    '<tr><td>Opening debt</td><td>$'+a.opening_debt.toFixed(1)+'M</td></tr>' +
+    '<tr><td>Interest rate</td><td>'+a.interest_rate_pct.toFixed(1)+'%</td></tr>' +
+    '<tr><td>Exit multiple</td><td>'+a.exit_multiple.toFixed(2)+'x</td></tr>' +
+    '<tr><td>Min cash</td><td>$'+a.min_cash.toFixed(1)+'M</td></tr>' +
+    '<tr><td>Hold period</td><td>'+a.hold_years+' years</td></tr>' +
+    '</table>';
+  document.getElementById('lbo-assumptions-summary').innerHTML = html;
+}
+
+function renderLboWarnings(warnings){
+  var el = document.getElementById('lbo-warnings-banner');
+  if (!warnings || !warnings.length) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div style="background:var(--danger-bg);border:1px solid var(--danger);color:var(--danger);border-radius:var(--radius);padding:8px 12px;font-size:12px;margin-bottom:10px"><ul style="margin:0;padding-left:18px">' +
+    warnings.map(function(w){ return '<li>'+w+'</li>'; }).join('') + '</ul></div>';
+}
+
+async function runLboPreview(){
+  var financials = readFinancialsGrid();
+  var gridErr = validateFinancialsGrid(financials);
+  if (gridErr) { document.getElementById('lbo-status').textContent = gridErr; return; }
+  var stop = startLoadingStatus('lbo-status', LBO_LOADING_MESSAGES);
+  var exitMultipleVal = document.getElementById('f-exit-multiple').value;
+  var body = {
+    base_case_financials: financials,
+    fixed_assumptions: {
+      entry_tev: parseFloat(document.getElementById('f-entry-tev').value) || undefined,
+      opening_debt: parseFloat(document.getElementById('f-opening-debt').value) || undefined,
+      effective_interest_rate_pct: parseFloat(document.getElementById('f-interest-rate').value) || 8,
+      min_cash: parseFloat(document.getElementById('f-min-cash').value) || 0,
+    },
+    exit_multiple_override: exitMultipleVal === '' ? null : parseFloat(exitMultipleVal),
+  };
+  try {
+    var res = await fetch('/api/lbo-preview', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    var data = await res.json();
+    stop();
+    if (!res.ok) throw new Error(data.detail || 'LBO preview failed');
+    lastLboPreview = data;
+    document.getElementById('lbo-status').textContent = '';
+    renderLboProjections(data);
+    renderLboEntryExit(data);
+    renderLboDebtSchedule(data);
+    renderLboAssumptions(data);
+    renderLboWarnings(data.warnings);
+    if (data.exit) {
+      document.getElementById('f-exit-multiple').placeholder = data.exit.multiple.toFixed(2) + 'x (base case)';
+    }
+  } catch (e) {
+    stop();
+    lastLboPreview = null;
+    document.getElementById('lbo-status').textContent = 'Error: ' + e.message;
+  }
+}
+
+document.getElementById('lbo-recalc-btn').addEventListener('click', runLboPreview);
+
+var LBO_EXTRACT_LOADING_MESSAGES = [
+  'Reading the model...',
+  'Finding Summary / Financial Model / Operating Model tabs...',
+  'Checking the Operating Case is set to FP Base Case...',
+  'Pulling entry TEV, opening debt, interest rate, min cash, exit multiple...',
+];
+
+document.getElementById('lbo-extract-btn').addEventListener('click', async function(){
+  if (!sessionId) { alert('Ingest documents first.'); return; }
+  var notesEl = document.getElementById('lbo-extract-notes');
+  var isPublic = isPublicCompanyMode();
+  var stop = startLoadingStatus('lbo-status', LBO_EXTRACT_LOADING_MESSAGES);
+  try {
+    var res = await fetch('/api/extract-lbo-assumptions', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({session_id: sessionId, is_public: isPublic})});
+    var data = await res.json();
+    stop();
+    if (!res.ok) throw new Error(data.detail || 'extraction failed');
+    if (isPublic) {
+      if (data.offer_price_per_share != null) document.getElementById('f-offer-price').value = data.offer_price_per_share;
+      if (data.diluted_shares_outstanding != null) document.getElementById('f-diluted-shares').value = data.diluted_shares_outstanding;
+      if (data.existing_net_debt != null) document.getElementById('f-existing-net-debt').value = data.existing_net_debt;
+      recomputePublicEntryTev();
+    } else if (data.entry_tev != null) {
+      document.getElementById('f-entry-tev').value = data.entry_tev;
+    }
+    if (data.opening_debt != null) document.getElementById('f-opening-debt').value = data.opening_debt;
+    if (data.effective_interest_rate_pct != null) document.getElementById('f-interest-rate').value = data.effective_interest_rate_pct;
+    if (data.min_cash != null) document.getElementById('f-min-cash').value = data.min_cash;
+    if (data.exit_multiple != null) document.getElementById('f-exit-multiple').value = data.exit_multiple;
+    document.getElementById('lbo-status').textContent = 'Assumptions extracted -- review before recalculating.';
+    if (data.source_notes) {
+      notesEl.style.display = 'block';
+      notesEl.innerHTML = '<strong>Source notes (from extraction):</strong> ' + data.source_notes;
+    }
+    runLboPreview();
+  } catch (e) {
+    stop();
+    document.getElementById('lbo-status').textContent = 'Error: ' + e.message;
+  }
+});
+
+document.getElementById('confirm-lbo-btn').addEventListener('click', function(){
+  if (!lastLboPreview) { alert('Recalculate the LBO preview first.'); return; }
+  var statusMsg = 'LBO mechanics confirmed.';
+  if (document.getElementById('lbo-sync-exit-multiple-cb').checked) {
+    var card = findExitMultipleCard();
+    if (card) {
+      var p50El = card.querySelector('[data-f=p50]');
+      if (p50El) p50El.value = lastLboPreview.exit.multiple.toFixed(2);
+      statusMsg = 'LBO mechanics confirmed -- exit multiple synced to the Monte Carlo variable card.';
+    }
+  }
+  document.getElementById('lbo-confirmed-status').textContent = statusMsg;
+  document.getElementById('simulate-section').style.display = 'block';
+});
+
+var CHAT_LOADING_MESSAGES = ['Thinking...', 'Weighing your answer against the card...'];
+
+function setCardFieldValue(card, field, value){
+  var el = card.querySelector('[data-f='+field+']');
+  if (el) el.value = (value != null ? value : '');
+}
+
+function applyProposedChange(change){
+  if (!change || !change.action) return;
+  var action = change.action;
+  if (action === 'add_variable' || action === 'edit_variable') {
+    var v = change.variable || {};
+    v.id = v.id || change.id;
+    var existing = v.id ? document.querySelector('#var-container .vcard[data-id="'+v.id+'"]') : null;
+    if (existing) {
+      existing.querySelector('.vname').value = v.name || '';
+      setCardFieldValue(existing, 'family', v.family || 'revenue_build');
+      setCardFieldValue(existing, 'dist', v.distribution || 'PERT');
+      setCardFieldValue(existing, 'p10', v.p10);
+      setCardFieldValue(existing, 'p50', v.p50);
+      setCardFieldValue(existing, 'p90', v.p90);
+      setCardFieldValue(existing, 'source', v.source || '');
+      var ta = existing.querySelector('.commentary');
+      if (ta) ta.value = v.commentary || '';
+      existing.dataset.intendedCorr = (v.correlated_with && v.correlated_with.variable) || '';
+      existing.dataset.unit = v.unit || existing.dataset.unit || '';
+      setCardFieldValue(existing, 'corr_tier', v.correlated_with && v.correlated_with.value != null ? String(v.correlated_with.value) : '0');
+      refreshCorrOptions();
+      finalizeCorrelations();
+      refreshDistPreview(existing);
+    } else {
+      createCard(v);
+      finalizeCorrelations();
+    }
+  } else if (action === 'remove_variable') {
+    var toRemove = document.querySelector('#var-container .vcard[data-id="'+change.id+'"]');
+    if (toRemove) { toRemove.remove(); refreshCorrOptions(); }
+  } else if (action === 'add_event' || action === 'edit_event') {
+    var ev = change.event || {};
+    ev.id = ev.id || change.id;
+    var existingEv = ev.id ? document.querySelector('#event-container .vcard[data-event-id="'+ev.id+'"]') : null;
+    var impact = ev.impact || {};
+    var acute = ev.acute_impact || {};
+    if (existingEv) {
+      existingEv.querySelector('.vname').value = ev.name || '';
+      setCardFieldValue(existingEv, 'category', ev.category || 'other');
+      setCardFieldValue(existingEv, 'shock_type', ev.shock_type || 'permanent');
+      var acuteBlock = existingEv.querySelector('.acute-block');
+      if (acuteBlock) acuteBlock.style.display = (ev.shock_type === 'temporary_with_recovery') ? 'block' : 'none';
+      setCardFieldValue(existingEv, 'p_success', ev.p_success);
+      setCardFieldValue(existingEv, 'source', ev.source || '');
+      var eta = existingEv.querySelector('.commentary');
+      if (eta) eta.value = ev.commentary || '';
+      setCardFieldValue(existingEv, 'rev_impact', impact.revenue_pct);
+      setCardFieldValue(existingEv, 'margin_impact', impact.margin_pct);
+      setCardFieldValue(existingEv, 'fcf_impact', impact.fcf_pct);
+      setCardFieldValue(existingEv, 'acute_rev', acute.revenue_pct);
+      setCardFieldValue(existingEv, 'acute_margin', acute.margin_pct);
+      setCardFieldValue(existingEv, 'acute_fcf', acute.fcf_pct);
+      setCardFieldValue(existingEv, 'acute_duration', acute.duration_years);
+    } else {
+      createEventCard(ev);
+    }
+  } else if (action === 'remove_event') {
+    var evToRemove = document.querySelector('#event-container .vcard[data-event-id="'+change.id+'"]');
+    if (evToRemove) evToRemove.remove();
+  }
+}
+
+function appendProposedChangeCard(change){
+  var div = document.createElement('div');
+  div.className = 'msg assistant';
+  div.style.border = '1px solid var(--gold)';
+  div.style.background = 'var(--gold-light)';
+  div.style.maxWidth = '95%';
+  var summary = change.summary || (change.action || 'proposed change');
+  div.innerHTML =
+    '<div style="font-size:12px;margin-bottom:6px"><strong>Proposed change:</strong> ' + summary + '</div>' +
+    '<div class="toolbar" style="margin:0">' +
+      '<button class="primary proposed-confirm-btn">Confirm</button>' +
+      '<button class="proposed-deny-btn">Deny</button>' +
+    '</div>';
+  document.getElementById('chat-log').appendChild(div);
+  div.querySelector('.proposed-confirm-btn').addEventListener('click', function(){
+    applyProposedChange(change);
+    div.innerHTML = '<div style="font-size:12px">Applied: ' + summary + '</div>';
+  });
+  div.querySelector('.proposed-deny-btn').addEventListener('click', function(){
+    div.innerHTML = '<div style="font-size:12px;color:var(--text-muted)">Denied: ' + summary + '</div>';
+  });
+  div.scrollIntoView();
+}
+
+document.getElementById('chat-send-btn').addEventListener('click', async function(){
+  var input = document.getElementById('chat-input');
+  var message = input.value.trim();
+  if (!message || !sessionId) return;
+  appendChatMsg('user', message);
+  input.value = '';
+  var stop = startLoadingStatus('chat-status', CHAT_LOADING_MESSAGES);
+  try {
+    var res = await fetch('/api/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({session_id: sessionId, message: message})});
+    var data = await res.json();
+    stop();
+    document.getElementById('chat-status').innerHTML = '';
+    if (!res.ok) throw new Error(data.detail || 'chat failed');
+    appendChatMsg('assistant', data.reply);
+    if (data.proposed_change) appendProposedChangeCard(data.proposed_change);
+  } catch (e) {
+    stop();
+    document.getElementById('chat-status').innerHTML = '';
+    appendChatMsg('assistant', 'Error: ' + e.message);
+  }
+});
+
+function irrBarColor(mid){ return mid < 0 ? '#e0554a' : mid > 0.20 ? '#2fa377' : '#d4af53'; }
+function moicBarColor(mid){ return mid < 1.0 ? '#e0554a' : mid > 2.0 ? '#2fa377' : '#d4af53'; }
+
+function renderHistogramSVG(container, hist, opts){
+  opts = opts || {};
+  var w = opts.width || 340, h = opts.height || 180;
+  var padL = 38, padR = 10, padT = 10, padB = opts.xLabel ? 34 : 22;
+  var counts = hist.counts, edges = hist.bin_edges;
+  var maxCount = Math.max.apply(null, counts) || 1;
+  var plotW = w - padL - padR, plotH = h - padT - padB;
+  var barW = plotW / counts.length;
+  var colorFn = opts.colorFn || function(){ return opts.color || '#d4af53'; };
+  var fmtX = opts.fmtX || function(v){ return v.toFixed(2); };
+  var bars = counts.map(function(c, i){
+    var mid = (edges[i] + edges[i+1]) / 2;
+    var barH = (c / maxCount) * plotH;
+    var x = padL + i * barW;
+    var y = padT + (plotH - barH);
+    return '<rect x="'+x+'" y="'+y+'" width="'+Math.max(barW-1, 0.5)+'" height="'+barH+'" fill="'+colorFn(mid)+'"></rect>';
+  }).join('');
+  var nTicks = 5, ticks = [];
+  for (var t = 0; t <= nTicks; t++){
+    var frac = t / nTicks;
+    var val = edges[0] + frac * (edges[edges.length-1] - edges[0]);
+    var x = padL + frac * plotW;
+    ticks.push('<line x1="'+x+'" y1="'+padT+'" x2="'+x+'" y2="'+(padT+plotH)+'" stroke="rgba(184,173,143,0.18)"></line>');
+    ticks.push('<text x="'+x+'" y="'+(padT+plotH+14)+'" font-size="9" text-anchor="middle" fill="#b8ad8f">'+fmtX(val)+'</text>');
+  }
+  var yTicks = '<text x="'+(padL-6)+'" y="'+(padT+4)+'" font-size="9" text-anchor="end" fill="#b8ad8f">'+maxCount+'</text>' +
+               '<text x="'+(padL-6)+'" y="'+(padT+plotH)+'" font-size="9" text-anchor="end" fill="#b8ad8f">0</text>';
+  var yLabel = opts.yLabel ? '<text x="10" y="'+(padT+plotH/2)+'" font-size="9" fill="#b8ad8f" text-anchor="middle" transform="rotate(-90 10 '+(padT+plotH/2)+')">'+opts.yLabel+'</text>' : '';
+  var xLabel = opts.xLabel ? '<text x="'+(padL+plotW/2)+'" y="'+(h-2)+'" font-size="9" fill="#b8ad8f" text-anchor="middle">'+opts.xLabel+'</text>' : '';
+  var svg = '<svg viewBox="0 0 '+w+' '+h+'" width="100%" height="'+h+'">' + ticks.join('') + bars + yTicks + yLabel + xLabel + '</svg>';
+  container.innerHTML = svg;
+}
+
+function validateFinancialsGrid(financials){
+  if (!financials) return null;
+  var missing = [];
+  FIN_ROWS.forEach(function(row){
+    (financials[row.key] || []).forEach(function(v, i){
+      if (v == null) missing.push(row.label + ' (' + financials.fiscal_years[i] + ')');
+    });
+  });
+  ['exit_valuation', 'proceeds_to_fp'].forEach(function(key){
+    if (financials[key] == null) missing.push(key === 'exit_valuation' ? 'Exit valuation' : 'Proceeds to FP');
+  });
+  if (missing.length) {
+    return 'Base case financials are incomplete -- fill in every cell before running the simulation. Missing: ' + missing.join(', ');
+  }
+  return null;
+}
+
+function renderSimulationResults(r, nPaths, dealConfig){
+  var html = '';
+  var variables = (dealConfig && dealConfig.variables) || [];
+  var heldConstant = variables.filter(function(v){ return v.p10 == null || v.p90 == null; });
+  if (heldConstant.length) {
+    var allConstant = heldConstant.length === variables.length && variables.length > 0;
+    var names = heldConstant.map(function(v){ return v.name || v.id; }).join(', ');
+    html += '<div style="background:var(--danger-bg);border:1px solid var(--danger);color:var(--danger);border-radius:var(--radius);padding:8px 12px;font-size:12px;margin-bottom:12px">' +
+      (allConstant
+        ? '<strong>No spread in this result:</strong> every sampled variable is held constant at its P50 (none has a sourced P10/P90 range), so every path produces the identical IRR/MoIC -- that\'s why the histogram below is a single spike, not a bug in the simulation. Fill in a real P10/P90 range for: '
+        : '<strong>Partial spread only:</strong> ' + heldConstant.length + ' of ' + variables.length + ' variables have no sourced P10/P90 range and are held constant at P50 (never invented, per house rule) -- the spread below reflects only the other variables\' uncertainty. Unsourced: ') +
+      names + '.</div>';
+  }
+  if (r.unit_issues && r.unit_issues.length) {
+    html += '<div style="background:var(--danger-bg);border:1px solid var(--danger);color:var(--danger);border-radius:var(--radius);padding:8px 12px;font-size:12px;margin-bottom:12px">' +
+      '<strong>Likely units mismatch:</strong><ul style="margin:4px 0 0;padding-left:18px">' +
+      r.unit_issues.map(function(u){ return '<li>' + u.message + '</li>'; }).join('') +
+      '</ul></div>';
+  }
+  html += '<div id="results-stats">' +
+    statCard('IRR P10', (r.percentiles.irr.p10*100).toFixed(1)+'%') +
+    statCard('IRR P50', (r.percentiles.irr.p50*100).toFixed(1)+'%') +
+    statCard('IRR P90', (r.percentiles.irr.p90*100).toFixed(1)+'%') +
+    statCard('MoIC P10', r.percentiles.moic.p10.toFixed(2)+'x') +
+    statCard('MoIC P50', r.percentiles.moic.p50.toFixed(2)+'x') +
+    statCard('MoIC P90', r.percentiles.moic.p90.toFixed(2)+'x') +
+    '</div>';
+  html += '<h2>IRR distribution</h2><div id="irr-hist"></div>';
+  html += '<h2 style="margin-top:16px">MoIC distribution</h2><div id="moic-hist"></div>';
+  html += '<h2 style="margin-top:16px">Driver ranking</h2><table><tr><th>Variable</th><th>Rank corr. to IRR</th><th>Worst decile</th><th>Best decile</th></tr>' +
+    r.driver_ranking.map(function(d){ return '<tr><td>'+d.variable+'</td><td>'+d.rank_correlation_to_irr+'</td><td>'+d.worst_decile_mean.toFixed(2)+'</td><td>'+d.best_decile_mean.toFixed(2)+'</td></tr>'; }).join('') +
+    '</table>';
+  if (r.unmapped_variables && r.unmapped_variables.length) {
+    html += '<div style="background:var(--danger-bg);border:1px solid var(--danger);color:var(--danger);border-radius:var(--radius);padding:8px 12px;font-size:12px;margin-bottom:12px">' +
+      '<strong>No effect on returns:</strong> these variables are sampled (their own percentiles above are real) but neither their id nor their family tag matched any LBO mechanic (revenue growth / margin / cash conversion / cost-out / exit multiple / leverage / entry TEV), so flexing them changes nothing in the simulated outcome: ' +
+      r.unmapped_variables.join(', ') + '. Rename the variable id to include the driving concept (e.g. "..._growth", "..._margin", "..._cost_out"), or check its family tag, if it should actually move the math.</div>';
+  }
+  var beKeys = Object.keys(r.binary_events_check || {});
+  if (beKeys.length) {
+    html += '<h2 style="margin-top:16px">Binary events</h2><table><tr><th>Event</th><th>Category</th><th>P(no fire)</th><th>Fires in paths</th></tr>' +
+      beKeys.map(function(k){ var e = r.binary_events_check[k]; return '<tr><td>'+k+'</td><td>'+e.category+'</td><td>'+e.p_success+'</td><td>'+e.fires_in_paths+' / '+nPaths+'</td></tr>'; }).join('') +
+      '</table>';
+  }
+  if (r.exit_percentiles) {
+    html += '<h2 style="margin-top:16px">Exit outcome (from the base-case spine)</h2><div id="results-stats" style="grid-template-columns:repeat(3,minmax(0,1fr))">' +
+      statCard('Exit valuation P50', '$'+r.exit_percentiles.exit_valuation.p50.toFixed(0)+'M') +
+      statCard('Proceeds to FP P50', '$'+r.exit_percentiles.proceeds_to_fp.p50.toFixed(0)+'M') +
+      statCard('Base case exit val.', '$'+r.base_case_comparison.base_exit_valuation.toFixed(0)+'M') +
+      '</div>';
+    html += '<p class="sub">Base case (as pulled/confirmed) implies a ' + r.base_case_comparison.base_implied_cagr_pct + '% revenue CAGR and a ' + r.base_case_comparison.base_implied_exit_multiple + 'x exit multiple, for comparison against the ranges above -- proceeds to FP in the base case: $' + r.base_case_comparison.base_proceeds_to_fp.toFixed(0) + 'M.</p>';
+  }
+  document.getElementById('results').innerHTML = html;
+  renderHistogramSVG(document.getElementById('irr-hist'), r.histogram.irr, {
+    xLabel: 'IRR', yLabel: '# of paths',
+    fmtX: function(v){ return (v*100).toFixed(0)+'%'; },
+    colorFn: irrBarColor,
+  });
+  renderHistogramSVG(document.getElementById('moic-hist'), r.histogram.moic, {
+    xLabel: 'MoIC', yLabel: '# of paths',
+    fmtX: function(v){ return v.toFixed(1)+'x'; },
+    colorFn: moicBarColor,
+  });
+}
+
+document.getElementById('simulate-btn').addEventListener('click', async function(){
+  var dealConfig = buildDealConfig();
+  var nPaths = 10000;
+  var seed = 42;
+  var validationError = validateFinancialsGrid(dealConfig.base_case_financials);
+  if (validationError) {
+    document.getElementById('results').innerHTML = '<p style="color:var(--danger)">' + validationError + '</p>';
+    return;
+  }
+  document.getElementById('results').innerHTML = '<div class="loading-row"><span class="roulette spin" aria-hidden="true"></span>Running ' + nPaths + ' paths...</div>';
+  try {
+    var res = await fetch('/api/simulate', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({deal_config: dealConfig, n_paths: nPaths, seed: seed})});
+    var r = await res.json();
+    if (!res.ok) throw new Error(r.detail || 'simulate failed');
+    renderSimulationResults(r, nPaths, dealConfig);
+    lastDealConfig = dealConfig;
+    lastResults = r;
+    lastScenarioNarratives = null;
+    document.getElementById('export-slide-btn').disabled = false;
+    document.getElementById('narrate-btn').disabled = false;
+    document.getElementById('narrate-status').textContent = '';
+    document.getElementById('scenario-narratives').innerHTML = '';
+  } catch (e) {
+    document.getElementById('results').innerHTML = 'Error: ' + e.message;
+    lastDealConfig = lastResults = lastScenarioNarratives = null;
+    document.getElementById('export-slide-btn').disabled = true;
+    document.getElementById('narrate-btn').disabled = true;
+    document.getElementById('scenario-narratives').innerHTML = '';
+  }
+});
+
+var NARRATE_LOADING_MESSAGES = [
+  'Reading the confirmed variable card...',
+  'Checking which drivers actually move IRR...',
+  'Working out what the downside looks like in the business...',
+  'Working out what the upside looks like in the business...',
+  'Drafting the scenario narratives...',
+];
+
+function scenarioBandCard(title, accentColor, band){
+  if (!band) return '';
+  var drivers = (band.key_drivers || []).map(function(d){
+    return '<li><strong>' + escapeHtml(d.variable) + ':</strong> ' + escapeHtml(d.state) + '</li>';
+  }).join('');
+  return '<div class="vcard" style="border-top-color:' + accentColor + ';display:block">' +
+    '<h3 style="margin:0 0 6px;color:' + accentColor + '">' + title + '</h3>' +
+    '<p style="margin:0 0 8px;font-size:13px;color:var(--text)">' + escapeHtml(band.narrative) + '</p>' +
+    (drivers ? '<ul style="margin:0;padding-left:18px;font-size:12px;color:var(--text-secondary)">' + drivers + '</ul>' : '') +
+    '</div>';
+}
+
+function renderScenarioNarratives(data){
+  var html = scenarioBandCard('Downside (~P10 IRR)', '#e0554a', data.downside) +
+    scenarioBandCard('Base case (~P50 IRR)', '#d4af53', data.base_case) +
+    scenarioBandCard('Upside (~P90 IRR)', '#2fa377', data.upside);
+  document.getElementById('scenario-narratives').innerHTML = html;
+}
+
+document.getElementById('narrate-btn').addEventListener('click', async function(){
+  if (!lastDealConfig || !lastResults) { alert('Run a simulation first.'); return; }
+  var stop = startLoadingStatus('narrate-status', NARRATE_LOADING_MESSAGES);
+  this.disabled = true;
+  try {
+    var res = await fetch('/api/narrate-scenarios', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        session_id: sessionId,
+        deal_config: lastDealConfig,
+        results: lastResults,
+        card_is_demo: document.getElementById('demo-banner').style.display === 'block',
+      }),
+    });
+    var data = await res.json();
+    stop();
+    if (!res.ok) throw new Error(data.detail || 'narrate-scenarios failed');
+    document.getElementById('narrate-status').textContent = '';
+    lastScenarioNarratives = data;
+    renderScenarioNarratives(data);
+  } catch (e) {
+    stop();
+    document.getElementById('narrate-status').textContent = 'Error: ' + e.message;
+  } finally {
+    this.disabled = false;
+  }
+});
+
+document.getElementById('export-slide-btn').addEventListener('click', async function(){
+  if (!lastDealConfig || !lastResults) { alert('Run a simulation first.'); return; }
+  var btn = this;
+  btn.disabled = true;
+  btn.textContent = 'Opening in PowerPoint...';
+  try {
+    var res = await fetch('/api/export-slide-open', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({deal_config: lastDealConfig, results: lastResults, scenario_narratives: lastScenarioNarratives})});
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'could not open PowerPoint');
+  } catch (e) {
+    // PowerPoint automation only works locally on Windows with PowerPoint installed (see
+    // slide_export.open_in_powerpoint) -- fall back to a plain download so the slide is still
+    // usable if that's not available on this machine.
+    try {
+      var res2 = await fetch('/api/export-slide', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({deal_config: lastDealConfig, results: lastResults, scenario_narratives: lastScenarioNarratives})});
+      if (!res2.ok) throw new Error('export failed');
+      var blob = await res2.blob();
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = (lastDealConfig.deal || 'deal').replace(/\s+/g, '_') + '_monte_carlo.pptx';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      alert('Could not open PowerPoint automatically (' + e.message + ') -- downloaded the slide instead.');
+    } catch (e2) {
+      alert('Export failed: ' + e.message);
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Export IC slide';
+  }
+});
+
+function statCard(label, value){
+  return '<div class="stat"><div class="label">'+label+'</div><div class="value">'+value+'</div></div>';
+}
+
+// --- Landing / saved-projects / restart ---
+
+function showLanding(){
+  document.getElementById('landing-view').style.display = 'block';
+  document.getElementById('projects-list-view').style.display = 'none';
+  document.getElementById('workflow-view').style.display = 'none';
+}
+
+function showWorkflowView(){
+  document.getElementById('landing-view').style.display = 'none';
+  document.getElementById('projects-list-view').style.display = 'none';
+  document.getElementById('workflow-view').style.display = 'block';
+}
+
+function resetWorkflowState(){
+  sessionId = null;
+  currentProjectId = null;
+  lastFinancials = null;
+  lastLboPreview = null;
+  lastDealConfig = null;
+  lastResults = null;
+  lastScenarioNarratives = null;
+  document.getElementById('project-name-input').value = '';
+  document.getElementById('var-container').innerHTML = '';
+  document.getElementById('event-container').innerHTML = '';
+  document.getElementById('chat-log').innerHTML = '';
+  document.getElementById('financials-grid-container').innerHTML = '';
+  document.getElementById('financials-demo-banner').style.display = 'none';
+  document.getElementById('demo-banner').style.display = 'none';
+  document.getElementById('results').innerHTML = '';
+  document.getElementById('scenario-narratives').innerHTML = '';
+  document.getElementById('narrate-status').textContent = '';
+  document.getElementById('narrate-btn').disabled = true;
+  document.getElementById('lbo-projections-table').innerHTML = '';
+  document.getElementById('lbo-entry-exit-cards').innerHTML = '';
+  document.getElementById('lbo-debt-schedule-table').innerHTML = '';
+  document.getElementById('lbo-assumptions-summary').innerHTML = '';
+  document.getElementById('lbo-warnings-banner').innerHTML = '';
+  document.getElementById('lbo-exit-multiple-reference').textContent = '';
+  document.getElementById('lbo-sync-exit-multiple-cb').checked = false;
+  ['propose-section','card-section','chat-section','financials-section','lbo-mechanics-section','simulate-section'].forEach(function(id){
+    document.getElementById(id).style.display = 'none';
+  });
+  document.getElementById('deck-file').value = '';
+  document.getElementById('model-file').value = '';
+  document.getElementById('deck-preview-btn').style.display = 'none';
+  document.getElementById('model-preview-btn').style.display = 'none';
+  closeDocPreviewModal();
+  document.getElementById('ingest-status').textContent = 'No documents ingested yet.';
+  document.getElementById('propose-status').textContent = '';
+  document.getElementById('financials-status').textContent = '';
+  document.getElementById('financials-confirmed-status').textContent = '';
+  document.getElementById('lbo-status').textContent = '';
+  document.getElementById('lbo-confirmed-status').textContent = '';
+  document.getElementById('save-project-status').textContent = '';
+  ['f-deal','f-entry-tev','f-opening-debt','f-min-cash','f-exit-multiple','f-offer-price','f-diluted-shares'].forEach(function(id){
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('f-interest-rate').value = '8';
+  document.getElementById('f-existing-net-debt').value = '0';
+  setPublicCompanyMode(false);
+  document.getElementById('export-slide-btn').disabled = true;
+}
+
+document.getElementById('new-project-btn').addEventListener('click', function(){
+  resetWorkflowState();
+  showWorkflowView();
+});
+
+document.getElementById('restart-btn').addEventListener('click', function(){
+  if (!confirm('Restart? Any unsaved progress in this project will be lost.')) return;
+  resetWorkflowState();
+});
+
+document.getElementById('home-btn').addEventListener('click', showLanding);
+document.getElementById('open-project-btn').addEventListener('click', showProjectsListView);
+document.getElementById('projects-back-btn').addEventListener('click', showLanding);
+
+function escapeHtml(s){
+  var d = document.createElement('div');
+  d.textContent = s || '';
+  return d.innerHTML;
+}
+
+async function showProjectsListView(){
+  document.getElementById('landing-view').style.display = 'none';
+  document.getElementById('projects-list-view').style.display = 'block';
+  await refreshProjectsList();
+}
+
+async function refreshProjectsList(){
+  var container = document.getElementById('projects-list-container');
+  container.innerHTML = '<p class="sub">Loading...</p>';
+  try {
+    var res = await fetch('/api/projects');
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'could not load projects');
+    if (!data.projects.length) {
+      container.innerHTML = '<p class="sub">No saved projects yet -- start a New Project and use Save project once you have something worth keeping.</p>';
+      return;
+    }
+    container.innerHTML = data.projects.map(function(p){
+      var updated = p.updated_at ? new Date(p.updated_at).toLocaleString() : '';
+      return '<div class="vcard">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px">' +
+          '<div><strong>'+escapeHtml(p.name)+'</strong>' +
+            '<div class="sub" style="margin:2px 0 0">'+escapeHtml(p.stage_reached)+' -- updated '+updated+'</div></div>' +
+          '<div class="toolbar" style="margin:0;flex-wrap:nowrap">' +
+            '<button class="primary open-project-btn" data-id="'+p.id+'">Open</button>' +
+            '<button class="rename-project-btn" data-id="'+p.id+'" data-name="'+escapeHtml(p.name)+'">Rename</button>' +
+            '<button class="del-project-btn" data-id="'+p.id+'">Delete</button>' +
+          '</div>' +
+        '</div></div>';
+    }).join('');
+    container.querySelectorAll('.open-project-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ openProject(btn.getAttribute('data-id')); });
+    });
+    container.querySelectorAll('.rename-project-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ renameProject(btn.getAttribute('data-id'), btn.getAttribute('data-name')); });
+    });
+    container.querySelectorAll('.del-project-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ deleteProjectPrompt(btn); });
+    });
+  } catch (e) {
+    container.innerHTML = '<p style="color:var(--danger)">Error loading projects: ' + e.message + '</p>';
+  }
+}
+
+async function openProject(id){
+  try {
+    var res = await fetch('/api/projects/' + id);
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'could not open project');
+    hydrateFromProject(data);
+    showWorkflowView();
+  } catch (e) {
+    alert('Error opening project: ' + e.message);
+  }
+}
+
+async function renameProject(id, oldName){
+  var name = prompt('Rename project:', oldName);
+  if (!name || name === oldName) return;
+  try {
+    var res = await fetch('/api/projects/' + id, {method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name: name})});
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'rename failed');
+    refreshProjectsList();
+  } catch (e) {
+    alert('Error renaming project: ' + e.message);
+  }
+}
+
+async function deleteProjectPrompt(btn){
+  // Two-click in-page confirm instead of window.confirm() -- some browsers (enterprise dialog
+  // policies, or Chrome's own "prevent this page from creating additional dialogs" after repeated
+  // triggers) silently suppress native confirm()/alert()/prompt() and have it return false with no
+  // visible dialog at all, which makes Delete look like it does nothing. This never depends on a
+  // native dialog succeeding.
+  if (btn.getAttribute('data-confirming') !== '1') {
+    btn.setAttribute('data-confirming', '1');
+    btn.textContent = 'Click again to confirm';
+    btn.style.background = 'var(--danger)';
+    btn.style.color = '#fff';
+    btn.style.borderColor = 'var(--danger)';
+    clearTimeout(btn._revertTimer);
+    btn._revertTimer = setTimeout(function(){ resetDeleteButton(btn); }, 4000);
+    return;
+  }
+  clearTimeout(btn._revertTimer);
+  var id = btn.getAttribute('data-id');
+  btn.disabled = true;
+  btn.textContent = 'Deleting...';
+  try {
+    var res = await fetch('/api/projects/' + id, {method:'DELETE'});
+    if (!res.ok) { var data = await res.json(); throw new Error(data.detail || 'delete failed'); }
+    refreshProjectsList();
+  } catch (e) {
+    alert('Error deleting project: ' + e.message);
+    btn.disabled = false;
+    resetDeleteButton(btn);
+  }
+}
+
+function resetDeleteButton(btn){
+  btn.setAttribute('data-confirming', '0');
+  btn.textContent = 'Delete';
+  btn.style.background = '';
+  btn.style.color = '';
+  btn.style.borderColor = '';
+}
+
+document.getElementById('save-project-btn').addEventListener('click', async function(){
+  var statusEl = document.getElementById('save-project-status');
+  var name = document.getElementById('project-name-input').value.trim() || 'Untitled project';
+  var financialsConfirmed = document.getElementById('lbo-mechanics-section').style.display === 'block';
+  var lboConfirmed = document.getElementById('simulate-section').style.display === 'block';
+  var body = {
+    project_id: currentProjectId,
+    name: name,
+    session_id: sessionId,
+    base_case_financials: readFinancialsGrid(),
+    fixed_assumptions: financialsConfirmed ? {
+      entry_tev: parseFloat(document.getElementById('f-entry-tev').value) || undefined,
+      opening_debt: parseFloat(document.getElementById('f-opening-debt').value) || undefined,
+      effective_interest_rate_pct: parseFloat(document.getElementById('f-interest-rate').value) || 8,
+      min_cash: parseFloat(document.getElementById('f-min-cash').value) || 0,
+      is_public: isPublicCompanyMode(),
+      offer_price_per_share: document.getElementById('f-offer-price').value === '' ? undefined : parseFloat(document.getElementById('f-offer-price').value),
+      diluted_shares_outstanding: document.getElementById('f-diluted-shares').value === '' ? undefined : parseFloat(document.getElementById('f-diluted-shares').value),
+      existing_net_debt: parseFloat(document.getElementById('f-existing-net-debt').value) || 0,
+    } : null,
+    exit_multiple_override: document.getElementById('f-exit-multiple').value === '' ? null : parseFloat(document.getElementById('f-exit-multiple').value),
+    deal_config: lastDealConfig || (sessionId ? buildDealConfig() : null),
+    results: lastResults,
+    card_is_demo: document.getElementById('demo-banner').style.display === 'block',
+    financials_is_demo: document.getElementById('financials-demo-banner').style.display === 'block',
+    financials_confirmed: financialsConfirmed,
+    lbo_confirmed: lboConfirmed,
+  };
+  statusEl.textContent = 'Saving...';
+  try {
+    var res = await fetch('/api/projects/save', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'save failed');
+    currentProjectId = data.project_id;
+    statusEl.textContent = 'Saved.';
+  } catch (e) {
+    statusEl.textContent = 'Error: ' + e.message;
+  }
+});
+
+function hydrateFromProject(data){
+  resetWorkflowState();
+  sessionId = data.session_id;
+  currentProjectId = data.id;
+  document.getElementById('project-name-input').value = data.name || '';
+
+  if (data.card) {
+    renderCard(data.card, !!data.card_is_demo);
+    (data.chat_history || []).forEach(function(m){
+      if (!m.content || m.content.indexOf('[') === 0) return; // skip the synthetic seed message
+      appendChatMsg(m.role, m.content);
+    });
+  }
+
+  if (data.base_case_financials) {
+    renderFinancialsGrid(data.base_case_financials, !!data.financials_is_demo);
+    document.getElementById('financials-section').style.display = 'block';
+  }
+
+  if (data.financials_confirmed) {
+    document.getElementById('financials-confirmed-status').textContent = 'Base case financials confirmed.';
+    document.getElementById('lbo-mechanics-section').style.display = 'block';
+    if (data.fixed_assumptions) {
+      document.getElementById('f-entry-tev').value = data.fixed_assumptions.entry_tev != null ? data.fixed_assumptions.entry_tev : '';
+      document.getElementById('f-opening-debt').value = data.fixed_assumptions.opening_debt != null ? data.fixed_assumptions.opening_debt : '';
+      document.getElementById('f-interest-rate').value = data.fixed_assumptions.effective_interest_rate_pct != null ? data.fixed_assumptions.effective_interest_rate_pct : 8;
+      document.getElementById('f-min-cash').value = data.fixed_assumptions.min_cash != null ? data.fixed_assumptions.min_cash : 0;
+      document.getElementById('f-offer-price').value = data.fixed_assumptions.offer_price_per_share != null ? data.fixed_assumptions.offer_price_per_share : '';
+      document.getElementById('f-diluted-shares').value = data.fixed_assumptions.diluted_shares_outstanding != null ? data.fixed_assumptions.diluted_shares_outstanding : '';
+      document.getElementById('f-existing-net-debt').value = data.fixed_assumptions.existing_net_debt != null ? data.fixed_assumptions.existing_net_debt : 0;
+      setPublicCompanyMode(!!data.fixed_assumptions.is_public);
+    }
+    document.getElementById('f-exit-multiple').value = data.exit_multiple_override != null ? data.exit_multiple_override : '';
+    seedExitMultipleField();
+    runLboPreview();
+  }
+
+  if (data.lbo_confirmed) {
+    document.getElementById('lbo-confirmed-status').textContent = 'LBO mechanics confirmed.';
+    document.getElementById('simulate-section').style.display = 'block';
+  }
+
+  if (data.results && data.deal_config) {
+    lastDealConfig = data.deal_config;
+    lastResults = data.results;
+    var nPaths = (data.results.run_manifest && data.results.run_manifest.n_paths) || 10000;
+    renderSimulationResults(data.results, nPaths, data.deal_config);
+    document.getElementById('export-slide-btn').disabled = false;
+    document.getElementById('narrate-btn').disabled = false;
+  }
+}
+</script>
+
+</body>
+</html>

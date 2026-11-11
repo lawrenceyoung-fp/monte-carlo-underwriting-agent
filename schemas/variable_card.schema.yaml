@@ -1,0 +1,154 @@
+# variable_card.yaml — the working artifact produced by /monte-carlo-model (skills/monte-carlo-model), STAGE 1-4.
+#
+# This is NOT deal_config.yaml. It is the proposal-and-negotiation surface that comes before it:
+# the AI's candidate read of a deck + model, with every number cited and every judgment call
+# explained in `commentary`, sitting in front of the deal team so they can confirm / edit / reject /
+# add / remove before anything gets frozen. Once the team clicks Confirm on the variable card
+# widget, /monte-carlo-model transforms this file into deal_config.yaml (per
+# schemas/deal_config.schema.yaml) and continues, in the SAME skill, through the lightweight engine
+# and the IC slide. There is no separate hand-off skill — /monte-carlo-model owns the whole run
+# end to end, because nobody invokes the variable-card step without wanting the slide at the end.
+#
+# VERSIONING: every save (manual "Save version" in the widget, or an automatic save before a
+# confirm) is written to cases/<deal>/variable_card.v{N}.yaml, N incrementing from 1. `version` and
+# `based_on_version` below record that chain. Re-running /monte-carlo-model on a deal that already
+# has saved versions should offer to load the latest (or a named) version as the Stage 1 starting
+# point instead of re-ingesting from scratch.
+#
+# CORRELATION MODEL (continuous variables): intentionally simplified. Each variable may declare
+# `correlated_with` ONE other variable (by id) plus a tier — not a general pairwise matrix. This is
+# a stated simplification, not an oversight — anywhere a variable's single slot couldn't capture
+# every relationship the deck supports, `commentary` says so explicitly.
+#
+# TWO DIFFERENT "NEVER INVENT A NUMBER" RULES — read carefully, they are not the same rule:
+#   - A continuous variable's P10/P90 stays `null` when nothing in the materials sources a range.
+#     Guessing one and presenting it as if it were sourced is exactly what house rule 1 forbids.
+#   - A binary event's `p_success` and `impact` fields work differently ON PURPOSE: every proposed
+#     event should carry Claude's own REASONED FIRST-PASS ESTIMATE (using stated logic, comparable
+#     base rates, and whatever the materials do disclose), not a blank. The estimate is not a
+#     citation and must never be presented as one — `commentary` carries the reasoning, `source`
+#     carries only what the materials actually say (which may be "no explicit probability disclosed
+#     -- see commentary for the reasoned estimate"). An attributed, shown-its-work estimate is
+#     categorically different from silently inventing a number and is what makes Stage 3's
+#     challenge conversation possible at all for events the materials only describe qualitatively.
+
+deal: null # str — the deal name
+version: 1 # int — increments on every saved version
+based_on_version: null # int or null — the version this one was loaded from and edited, if any
+saved_at: null # str — ISO timestamp, set at save time
+prepared_by: null # str — "Claude / monte-carlo-model skill" or a person
+source_documents:
+  ic_deck: null # path + a note on which version
+  model: null # path + a note on which version
+  model_cells_tagged: false # true once the ~8 cells are tagged via openpyxl against the real workbook
+stage: "draft" # draft | team_reviewed | confirmed_for_handoff
+
+variables:
+  # 3 to 10 entries. Not fewer (nothing to simulate), not more (unreviewable in one sitting).
+  - id: null # str, snake_case, stable identifier
+    name: null # str, human-readable — editable in the widget; re-slugify id if renamed
+    family: null # market_macro | revenue_build | margin_cost | cash_conversion | exit_structure | discrete_events
+    unit: null # str, e.g. "%", "x", "$M", "CAGR %"
+    type: null # continuous | discrete | binary
+    elicitation: [null, null, null] # [p10, p50, p90] — NEVER min/base/max
+    elicitation_basis: null # str — how these three numbers were derived
+    distribution: null # PERT | lognormal | beta | discrete_pmf | bernoulli | uniform
+    bounds: [null, null] # hard floor/cap, always explicit — no unbounded draw on a bounded quantity
+    source: null # str — REQUIRED. A slide number + one-line quote, or a real cell ref once tagged
+    drives: null # str — REQUIRED. Exactly which line in the shadow LBO / model this moves
+    correlated_with: # AT MOST one other variable — see CORRELATION MODEL note above
+      variable: null # another variable's id, or null for none
+      tier: null # unrelated | loosely_related | moderately_linked | strongly_linked | move_together
+      value: null # the fixed tier-ladder number matching `tier` — never a free-floating number
+    commentary: null # str — REQUIRED once Claude proposes a value. Claude's own explanation of the
+      # logic behind the range, the distribution choice, AND the correlation choice (or why none),
+      # in one paragraph. This is what the deal team actually reads to decide whether to trust or
+      # override a row — not a hidden implementation detail.
+    owner: null # str — blank until a person on the team claims it
+    review_status: "proposed" # proposed | team_adjusted | confirmed | rejected | cut
+    notes: null # str — open questions distinct from commentary (e.g. "deck's downside is a
+      # scenario, not a true 10th percentile — recommend widening")
+
+structural_candidates:
+  # Relationships pushed into model logic rather than treated as a correlation (e.g. exit multiple
+  # as a function of terminal growth + margin, a rule-of-40-style curve) — per
+  # docs/00-original-workflow-spec.md section 9. A variable with a structural_candidates entry
+  # should normally leave `correlated_with` null to avoid double-counting the same relationship.
+  - variable: null
+    proposed_function_of: [] # other variable ids
+    evidence: null # str — cite the deck's own anchors for the curve, if any
+    status: "open" # open | adopted_structural | rejected_kept_free
+
+binary_events:
+  # Not just whatever the deck happens to case-table out. Every deal gets actively screened for the
+  # three highest-value discrete-event categories below; propose the ones judged most impactful for
+  # THIS deal specifically, say why the others were considered and deprioritized (in commentary or
+  # cut_list), and never mechanically include all three just because the taxonomy names them.
+  - id: null
+    name: null
+    type: "binary"
+    category: null # recession | regulatory | customer_loss | other -- pick the closest fit
+    p_success: null # REASONED FIRST-PASS ESTIMATE (probability the adverse branch does NOT fire) —
+      # see the top-of-file note. Left null only if Claude genuinely has no basis to estimate from
+      # (rare) -- the default expectation is a number, not a blank.
+    p_success_basis: null # str — REQUIRED whenever p_success is non-null. What grounds the number:
+      # comparable base rates, the materials' own qualitative signal, disclosed concentration data,
+      # etc. Distinct from `commentary` (which covers the whole event) in that this focuses
+      # specifically on defending the probability.
+    source: null # str — whatever the materials actually say about this risk, even if only
+      # qualitative. "No explicit mention in the materials" is a valid value; leaving this null
+      # is not, once the event is proposed.
+    shock_type: "permanent" # permanent | temporary_with_recovery — see note below. Default
+      # "permanent": the event's effect is a one-time step-change that persists once it fires
+      # (e.g. losing a customer, a regulatory change taking hold). Use "temporary_with_recovery"
+      # for shocks that hit hard and fade (e.g. a pandemic-style access disruption) — screen for
+      # this explicitly at Stage 2 rather than defaulting every event into the permanent shape;
+      # forcing a temporary shock into a single flat `impact` number either understates the acute
+      # damage or overstates the long-run damage, and both are wrong in a way that matters.
+    impact: # for shock_type "permanent": the event's full, ongoing effect from the moment it
+      # fires. For shock_type "temporary_with_recovery": the RESIDUAL effect that persists AFTER
+      # the acute window ends (see acute_impact below) — NOT the same number as the acute hit.
+      # Each field is a signed estimate (see commentary for reasoning), left null only where
+      # Claude judges there is truly no basis to size even roughly.
+      revenue_pct: null # signed % shift to revenue in the year the event manifests (or, for a
+        # temporary shock, in each year after the acute window through exit)
+      margin_pct: null # signed percentage-POINT shift to margin (not %, pp)
+      fcf_pct: null # signed % shift to free cash flow / EBITDA-CapCosts, beyond what the
+        # revenue and margin shifts already imply (e.g. added NWC drag, one-time costs)
+    acute_impact: # ONLY set when shock_type is "temporary_with_recovery". The severe, short-lived
+      # hit during the shock itself — almost always much larger in magnitude than `impact` above,
+      # because it's meant to be temporary. Left null (and unused) for "permanent" events.
+      revenue_pct: null
+      margin_pct: null
+      fcf_pct: null
+      duration_years: null # how long the acute window lasts before the effect eases to the
+        # residual `impact` level above — a fraction is fine (e.g. 0.5 for two quarters)
+    on_failure: # OPTIONAL, alternative/additional to `impact` — use when the event cleanly maps
+      # onto continuous variables already on this card (more precise than the generic impact
+      # block above). A given event may use `impact`, `on_failure`, or both.
+      - variable: null # id of a continuous variable this event shifts on failure
+        shift_description: null # str, e.g. "shift toward the downside-case value"
+        via: null # "direct" or the name of a structural_candidates link
+    commentary: null # str — REQUIRED. Why this event was judged among the most impactful for this
+      # deal (vs. the other two categories, which should be addressed even if only to say why they
+      # were deprioritized), the reasoning behind p_success, and the reasoning behind each impact
+      # figure. This is the field that turns a guess into a defensible first-pass estimate.
+    review_status: "proposed"
+
+challenge_list:
+  - name: null
+    why_it_might_matter: null
+    why_not_yet_a_variable: null
+
+cut_list:
+  - name: null
+    reason: null
+
+open_questions:
+  - null
+
+review:
+  team_reviewed: false
+  reviewers: []
+  review_date: null
+  confirmed_by: null # str — set when the widget's Confirm button is used; required before Stage 5

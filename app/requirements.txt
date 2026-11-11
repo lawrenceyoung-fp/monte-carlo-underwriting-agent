@@ -1,0 +1,9 @@
+# Install alongside simulation_service/requirements.txt (this app calls into that engine directly).
+anthropic==0.120.2
+pdfplumber==0.11.10
+python-multipart==0.0.32
+python-dotenv==1.2.2
+claude-agent-sdk==0.2.130
+openpyxl==3.1.5  # app/ingest.py reads source workbooks (deck/model ingest, Stage 5 financials extraction)
+python-pptx==1.0.2  # app/slide_export.py builds the Stage 7 IC slide
+pywin32==312; sys_platform == "win32"  # Stage 7 "open in PowerPoint" (app/slide_export.py) -- Windows only, degrades to a plain download elsewhere

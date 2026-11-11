@@ -1,0 +1,71 @@
+# deal_config.yaml — the frozen hand-off inside /monte-carlo-model, written at the end of Stage 5
+# (Confirm) and read at the start of Stage 6 (the lightweight shadow model). Both stages live in
+# the same skill now — there is no separate Component 1 / Component 2 anymore — but this file
+# still exists as a real, inspectable artifact between them, produced by reconciling a confirmed
+# variable_card.yaml (schema: schemas/variable_card.schema.yaml) rather than hand-authored fresh.
+#
+# This document describes the shape, not the real values. See cases/rightway/variable_card.draft.yaml
+# for what a confirmed card's content actually looks like, and cases/rightway/shadow_model.py for
+# how it gets consumed.
+
+deal: "Rightway"                      # str, the deal name
+case_toggle_held_at: 1                # int — Summary!AA11 held at 1 (Base Case) throughout, for
+                                        # whichever deals structure their model this way
+
+variables:
+  - id: "pbm_revenue_growth"           # str, snake_case, stable identifier
+    name: "PBM segment revenue growth (CAGR, FY25-30)"
+    distribution: "PERT"               # PERT | lognormal | beta | discrete_pmf | uniform
+    p10: null                          # number — never min/base/max
+    p50: null
+    p90: null
+    source: null                       # str — REQUIRED. Slide number or a real cell ref
+    drives: null                       # str — REQUIRED. Which line in the shadow model this moves
+    owner: null                        # str — who on the team confirmed this
+    confirmed_by: null                 # str — set from the widget's Confirm-button prompt
+    status: "signed_off"               # draft | pending_ic_review | signed_off
+
+  # ... one entry per confirmed variable (3-10 total) ...
+
+correlations:
+  # Flattened from each variable's single correlated_with slot in variable_card.yaml — at most one
+  # declared pair per variable, so at most N pairs for N variables (fewer once duplicates/nulls
+  # collapse). See variable_card.schema.yaml's CORRELATION MODEL note for why this is one slot per
+  # variable rather than a general matrix.
+  - pair: ["pbm_revenue_growth", "gross_margin_terminal"]
+    tier: "moderately_linked"          # unrelated | loosely_related | moderately_linked |
+                                        # strongly_linked | move_together
+    value: 0.40                        # the fixed tier-ladder value, not a free-floating number
+
+binary_events:
+  # One entry per confirmed binary/discrete event — NOT a single hardcoded slot. Every deal is
+  # screened against three standing categories (recession, regulatory, large customer/contract
+  # loss) at variable-card time; typically one or two clear the bar and land here, not all three.
+  - id: "big_3_pricing_response"
+    name: "Big 3 PBMs erode margin and compete more aggressively on price"
+    category: "regulatory"             # recession | regulatory | customer_loss | other
+    probability: null                  # the Bernoulli branch probability — a reasoned first-pass
+                                        # estimate at variable-card time, confirmed (or overridden)
+                                        # by the team before this file is written
+    impact:                            # generic quantified effect — always present, even when
+                                        # `moves` below is the more precise mechanism actually used
+      revenue_pct: null
+      margin_pct: null
+      fcf_pct: null
+    moves:                             # OPTIONAL — present when the event cleanly maps onto named
+                                        # continuous variables already in `variables` above (more
+                                        # precise than the generic impact block)
+      - variable: "pbm_revenue_growth"
+        direction: "down"
+      - variable: "gross_margin_terminal"
+        direction: "down"
+      - variable: "exit_multiple"
+        direction: "down"
+        via: "rule_of_40_curve"        # structural correlation, not an arbitrary input
+
+review:
+  ic_reviewed: false
+  reviewers: []                         # the two IC reviewers, once the session happens
+  review_date: null
+  confirmed_by: null                    # str — set when the variable-card widget's Confirm button
+                                         # was used to produce this file

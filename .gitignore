@@ -1,0 +1,30 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Personal Claude Code settings -- local permission allowlist, references local file paths.
+# .claude/launch.json (the dev-server config) IS tracked; this is the one exception.
+.claude/settings.local.json
+
+# Session data from testing -- real extracted deal content (ingested text, variable cards,
+# financials) from whatever decks/models were run through the app locally. Never meant to be
+# shared; each person's local saved_projects/ is their own scratch space.
+app/saved_projects/*.json
+
+# Real deal materials (the actual Rightway/Command/Summit/TeamSystem decks and model) -- kept out
+# of git deliberately; see CLAUDE.md for what these are. Clone locally and drop your own copies
+# back in if you have access, or test with the app's "Use demo card" / "Use demo financials" path,
+# which needs no real materials at all.
+cases/
+materials/
+
+# OS/editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+
+# Generated exports
+*.pptx
+!app/assets/*.pptx

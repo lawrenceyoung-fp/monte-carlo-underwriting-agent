@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "monte-carlo-app",
+      "runtimeExecutable": "C:\\Users\\Lawrence.Young\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+      "runtimeArgs": ["-m", "uvicorn", "app.main:app", "--port", "8009"],
+      "port": 8009
+    }
+  ]
+}
